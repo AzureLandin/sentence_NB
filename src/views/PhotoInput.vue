@@ -53,20 +53,27 @@
             </div>
 
             <div class="flex flex-wrap gap-3">
+              <button
+                v-if="!imagePreview"
+                @click="openCamera"
+                :disabled="ocrLoading"
+                class="flex-1 min-w-[140px] py-3 px-4 rounded-xl font-medium transition-all bg-blue-500 hover:bg-blue-600 text-white hover:scale-[1.02] disabled:opacity-50"
+              >
+                📷 拍照
+              </button>
               <label class="flex-1 min-w-[140px]">
                 <span class="block w-full text-center py-3 px-4 rounded-xl font-medium transition-all cursor-pointer"
                   :class="imagePreview 
                     ? 'bg-gray-100 hover:bg-gray-200 text-gray-700' 
-                    : 'bg-blue-500 hover:bg-blue-600 text-white hover:scale-[1.02]'">
-                  {{ imagePreview ? '重新选择' : '📷 拍照或上传图片' }}
+                    : 'bg-purple-500 hover:bg-purple-600 text-white hover:scale-[1.02]'">
+                  {{ imagePreview ? '重新选择' : '🖼️ 相册' }}
                 </span>
                 <input
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   class="hidden"
                   @change="handleFileChange"
-                  :disabled="ocrLoading || analyzing"
+                  :disabled="ocrLoading"
                 />
               </label>
               <button
@@ -186,11 +193,61 @@
         <span>{{ ocrError }}</span>
       </div>
     </div>
+
+    <!-- Camera Modal -->
+    <div
+      v-if="showCameraModal"
+      class="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4"
+      @click.self="closeCamera"
+    >
+      <div class="bg-white rounded-2xl max-w-2xl w-full overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h3 class="font-semibold text-gray-800">拍照</h3>
+          <button
+            @click="closeCamera"
+            class="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="p-6">
+          <div class="relative bg-black rounded-xl overflow-hidden" style="aspect-ratio: 4/3;">
+            <video
+              ref="videoElement"
+              autoplay
+              playsinline
+              class="w-full h-full object-cover"
+            ></video>
+            <canvas ref="canvasElement" class="hidden"></canvas>
+          </div>
+          <div v-if="cameraError" class="mt-4 text-sm text-red-600 text-center">
+            {{ cameraError }}
+          </div>
+          <div class="mt-4 flex justify-center gap-3">
+            <button
+              @click="capturePhoto"
+              :disabled="!cameraReady"
+              class="py-3 px-6 rounded-xl font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50"
+            >
+              📸 拍照
+            </button>
+            <button
+              @click="closeCamera"
+              class="py-3 px-6 rounded-xl font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { extractSentences } from '../api/ocr.js'
 import { useSentencesStore, useSettingsStore } from '../stores/index.js'
 
@@ -205,6 +262,14 @@ const ocrLoading = ref(false)
 const ocrError = ref('')
 const submitted = ref(false)
 const submittedCount = ref(0)
+
+// Camera related
+const showCameraModal = ref(false)
+const videoElement = ref(null)
+const canvasElement = ref(null)
+const cameraStream = ref(null)
+const cameraReady = ref(false)
+const cameraError = ref('')
 
 const step = computed(() => {
   if (ocrLoading.value) return 'ocr-loading'
@@ -351,4 +416,89 @@ function resetAll() {
   submitted.value = false
   submittedCount.value = 0
 }
+
+// Camera functions
+async function openCamera() {
+  showCameraModal.value = true
+  cameraError.value = ''
+  cameraReady.value = false
+
+  try {
+    // Request camera access with rear camera preference
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' }, // Prefer rear camera
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      }
+    })
+
+    cameraStream.value = stream
+    
+    // Wait for next tick to ensure video element is mounted
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    if (videoElement.value) {
+      videoElement.value.srcObject = stream
+      videoElement.value.onloadedmetadata = () => {
+        cameraReady.value = true
+      }
+    }
+  } catch (err) {
+    console.error('Camera access error:', err)
+    if (err.name === 'NotAllowedError') {
+      cameraError.value = '摄像头权限被拒绝，请在浏览器设置中允许访问摄像头'
+    } else if (err.name === 'NotFoundError') {
+      cameraError.value = '未找到摄像头设备'
+    } else {
+      cameraError.value = '无法访问摄像头：' + err.message
+    }
+  }
+}
+
+function closeCamera() {
+  if (cameraStream.value) {
+    cameraStream.value.getTracks().forEach(track => track.stop())
+    cameraStream.value = null
+  }
+  showCameraModal.value = false
+  cameraReady.value = false
+  cameraError.value = ''
+}
+
+function capturePhoto() {
+  if (!videoElement.value || !canvasElement.value || !cameraReady.value) return
+
+  const video = videoElement.value
+  const canvas = canvasElement.value
+
+  // Set canvas size to match video
+  canvas.width = video.videoWidth
+  canvas.height = video.videoHeight
+
+  // Draw video frame to canvas
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+  // Convert to data URL
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+  imagePreview.value = dataUrl
+  
+  const split = dataUrl.split(',')
+  imageBase64.value = split.length > 1 ? split[1] : ''
+
+  // Reset state
+  recognizedSentences.value = []
+  selectedSentenceIds.value = []
+  ocrError.value = ''
+  submitted.value = false
+
+  // Close camera
+  closeCamera()
+}
+
+// Cleanup on unmount
+onUnmounted(() => {
+  closeCamera()
+})
 </script>
