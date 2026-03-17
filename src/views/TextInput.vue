@@ -20,7 +20,7 @@
         :disabled="analyzing"
       ></textarea>
       <div class="flex items-center justify-between mt-3">
-        <span class="text-sm text-gray-400">{{ inputText.length }} 字符</span>
+        <span class="text-sm" :class="inputText.length > 2000 ? 'text-red-500 font-medium' : 'text-gray-400'">{{ inputText.length }} / 2000 字符</span>
         <div class="flex gap-2">
           <button @click="inputText = ''" class="btn-outline text-sm" :disabled="analyzing || !inputText">
             清空
@@ -73,10 +73,37 @@ const inputText = ref('')
 const analyzing = ref(false)
 const error = ref('')
 
+function validateInput(text) {
+  const trimmed = text.trim()
+
+  if (trimmed.length > 2000) {
+    return '输入内容过长，请控制在 2000 字符以内'
+  }
+
+  const letters = (trimmed.match(/[a-zA-Z]/g) || []).length
+  const ratio = letters / trimmed.length
+
+  if (letters < 10) {
+    return '请输入包含英文的句子（检测到的英文字母不足）'
+  }
+
+  if (ratio < 0.3) {
+    return '输入内容中英文比例过低，请输入英语句子进行分析'
+  }
+
+  return null
+}
+
 async function handleAnalyze() {
   if (!inputText.value.trim()) return
   if (!settingsStore.isAnalysisConfigured()) {
     error.value = '请先在设置中配置API Key'
+    return
+  }
+
+  const validationError = validateInput(inputText.value)
+  if (validationError) {
+    error.value = validationError
     return
   }
 

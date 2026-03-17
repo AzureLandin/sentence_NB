@@ -1,25 +1,32 @@
 import { chatCompletion } from './index.js'
 import { useSettingsStore } from '../stores/settings.js'
 
-const OCR_PROMPT = `You are an OCR assistant. Extract ALL English sentences from the image.
+const OCR_PROMPT = `You are an OCR assistant. Read the image and extract every English sentence as a separate item.
 
-CRITICAL RULES:
-1. Split sentences ONLY by punctuation: period(.), exclamation(!), question mark(?)
-2. DO NOT merge or split by meaning - use punctuation ONLY
-3. Each sentence ends when you see . ! or ? at the outermost level
-4. Merge text that crosses line breaks into the same sentence
-5. Fix common OCR errors (l/I, 0/O, etc.)
-6. Ignore non-English text, page numbers, headers
+STEP 1 — Read all text from the image, joining text that wraps across lines into a single continuous stream.
 
-OUTPUT FORMAT (strict):
-Return ONLY a JSON array. No explanation. No markdown.
-["First sentence.", "Second sentence?", "Third!"]
+STEP 2 — Split that stream into sentences using ONLY these terminal punctuation marks as boundaries:
+  • period  .  (but NOT inside abbreviations like "Mr." or decimals like "3.14")
+  • exclamation mark  !
+  • question mark  ?
+  A comma, semicolon, colon, or em-dash does NOT end a sentence.
+
+STEP 3 — Return the sentences as a JSON array. Each element is one complete sentence including its terminal punctuation.
+
+RULES:
+- Keep each sentence intact; do NOT paraphrase or merge sentences.
+- Fix obvious OCR errors (e.g. l→I, 0→O, rn→m).
+- Skip page numbers, headers, captions, and non-English text.
+- If a paragraph contains multiple sentences, output each one separately.
+
+OUTPUT FORMAT — return ONLY the raw JSON array, no markdown, no explanation:
+["Sentence one.", "Sentence two?", "Sentence three!"]
 
 EXAMPLE:
-Input text: "The cat sat. On the mat it lay! Was it comfortable?"
-Output: ["The cat sat.", "On the mat it lay!", "Was it comfortable?"]
+Image text: "The quick brown fox jumps over the lazy dog. Was it fast? Yes, incredibly fast! Mr. Smith agreed."
+Output: ["The quick brown fox jumps over the lazy dog.", "Was it fast?", "Yes, incredibly fast!", "Mr. Smith agreed."]
 
-Now extract sentences from the image. Return ONLY the JSON array:`
+Now extract sentences from the image:`
 
 // DeepSeek-OCR uses a special prompt format per SiliconFlow docs
 const DEEPSEEK_OCR_PROMPT = '<image>\n<|grounding|>OCR this image.'
@@ -179,9 +186,19 @@ function parseOcrResponse(response) {
   const sentences = splitTextToSentences(jsonStr)
   if (sentences.length > 0) return sentences
 
-  // Nothing worked — show truncated response for debugging
-  const preview = response.trim().slice(0, 200)
-  throw new Error(`未能从识别结果中提取到英文句子。模型返回: "${preview}"`)
+  // Check if the model returned a refusal or explanation instead of sentences
+  const lower = jsonStr.toLowerCase()
+  const isRefusal = [
+    'i cannot', 'i can\'t', 'i don\'t see', 'no english', 'no text',
+    'unable to', 'there are no', 'there is no', 'i apologize',
+    '没有英文', '图片中没有', '无法识别', '未检测到', '看不到',
+  ].some((phrase) => lower.includes(phrase))
+
+  if (isRefusal) {
+    throw new Error('图片中未检测到英文句子，请确认图片内容包含英文文字，或更换图片重试')
+  }
+
+  throw new Error('图片识别结果无法解析为英文句子，请检查图片清晰度或更换视觉模型')
 }
 
 export async function extractSentences(base64Image) {
