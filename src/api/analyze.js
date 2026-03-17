@@ -1,40 +1,32 @@
 import { chatCompletion } from './index.js'
 
-const ANALYSIS_PROMPT = `Analyze this English sentence and return a JSON object.
+const ANALYSIS_PROMPT = `分析这个英语句子，返回JSON对象。所有内容必须用中文！
 
-Sentence: {sentence}
+句子：{sentence}
 
-Return format (strict JSON, no markdown):
+返回格式（纯JSON，无markdown）：
 {
   "structure": [
-    {"text": "clause/phrase text", "type": "main clause/relative clause/adverbial clause/noun clause/phrase", "translation": "Chinese translation"}
+    {"text": "从句/短语原文", "type": "主句/定语从句/状语从句/宾语从句/短语", "translation": "该部分中文翻译"}
   ],
   "grammar": [
-    {"point": "grammar point name", "explanation": "detailed explanation in Chinese", "examples": ["example sentences"]}
+    {"point": "语法点名称", "explanation": "中文详细解释", "examples": ["相关例句"]}
   ],
   "vocabulary": [
-    {"word": "word or expression", "meaning": "Chinese meaning", "example": "example sentence"}
+    {"word": "词汇或表达", "meaning": "中文释义", "example": "例句"}
   ],
-  "translation": "natural Chinese translation",
-  "translationNote": "translation reasoning"
+  "translation": "通顺的中文翻译",
+  "translationNote": "翻译思路分析"
 }
 
-TRANSLATION RULES (critical):
-1. Translate for natural Chinese flow, NOT word-by-word
-2. Adjust word order to fit Chinese expression habits
-3. Use appropriate Chinese idioms when suitable
-4. Break long sentences into shorter segments if needed
-5. Preserve the original meaning and tone
-6. Avoid translationese (生硬翻译腔)
+重要规则：
+1. 所有字段内容必须用中文（type、explanation、meaning、translation、translationNote）
+2. 只有 text、word、example 保留英文原文
+3. 翻译要通顺自然，符合中文表达习惯
+4. 语法解释要通俗易懂，适合中国学习者
+5. 翻译思路要说明为什么这样翻译，做了哪些调整
 
-TRANSLATION NOTE should explain:
-- Why you chose this translation
-- What adjustments were made for Chinese expression
-- Key translation challenges and solutions
-
-GRAMMAR points should be practical and useful for learners.
-
-Return ONLY the JSON object, no explanation.`
+仅返回JSON对象，不要解释。`
 
 /**
  * Analyze an English sentence
@@ -51,7 +43,7 @@ export async function analyzeSentence(sentence) {
   const response = await chatCompletion([
     {
       role: 'system',
-      content: 'You are an expert English linguistics professor specializing in analyzing complex English sentences. Provide clear, practical analysis for Chinese learners. Return strict JSON format only.',
+      content: '你是一位专业的英语语言学教授，擅长分析英语长难句。所有回答内容必须使用中文，返回严格的JSON格式。',
     },
     {
       role: 'user',
