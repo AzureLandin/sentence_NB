@@ -34,7 +34,7 @@
 
     <!-- API not configured warning -->
     <div
-      v-if="!settingsStore.isConfigured()"
+      v-if="!settingsStore.isAnalysisConfigured()"
       class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800 mb-4"
     >
       请先前往
@@ -75,7 +75,7 @@ const error = ref('')
 
 async function handleAnalyze() {
   if (!inputText.value.trim()) return
-  if (!settingsStore.isConfigured()) {
+  if (!settingsStore.isAnalysisConfigured()) {
     error.value = '请先在设置中配置API Key'
     return
   }

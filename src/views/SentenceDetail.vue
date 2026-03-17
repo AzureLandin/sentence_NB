@@ -245,7 +245,7 @@ async function saveTags() {
 }
 
 async function reAnalyze() {
-  if (!sentence.value || !settingsStore.isConfigured()) {
+  if (!sentence.value || !settingsStore.isAnalysisConfigured()) {
     analysisError.value = '请先在设置中配置API Key'
     return
   }

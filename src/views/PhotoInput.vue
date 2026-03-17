@@ -148,7 +148,7 @@
             <div class="pt-2">
               <button
                 @click="handleBatchAnalyze"
-                :disabled="selectedSentenceIds.length === 0 || !settingsStore.isConfigured()"
+                :disabled="selectedSentenceIds.length === 0 || !settingsStore.isAnalysisConfigured()"
                 class="w-full py-3 px-4 rounded-xl font-medium transition-all bg-orange-500 hover:bg-orange-600 text-white hover:scale-[1.01] disabled:opacity-50 disabled:hover:scale-100"
               >
                 🚀 分析 {{ selectedSentenceIds.length }} 个句子
@@ -394,7 +394,7 @@ async function handleBatchAnalyze() {
     .map((item) => item.text)
 
   if (selectedTexts.length === 0) return
-  if (!settingsStore.isConfigured()) {
+  if (!settingsStore.isAnalysisConfigured()) {
     ocrError.value = '请先在设置中配置API Key和文本模型ID'
     return
   }

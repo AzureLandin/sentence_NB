@@ -1,4 +1,5 @@
 import { chatCompletion } from './index.js'
+import { useSettingsStore } from '../stores/settings.js'
 
 const ANALYSIS_PROMPT = `分析这个英语句子，返回JSON对象。所有内容必须用中文！
 
@@ -38,6 +39,7 @@ export async function analyzeSentence(sentence) {
     throw new Error('请输入需要分析的句子')
   }
 
+  const settings = useSettingsStore()
   const prompt = ANALYSIS_PROMPT.replace('{sentence}', sentence.trim())
 
   const response = await chatCompletion([
@@ -49,7 +51,7 @@ export async function analyzeSentence(sentence) {
       role: 'user',
       content: prompt,
     },
-  ])
+  ], settings.analysisApi)
 
   // Parse JSON from response, handling potential markdown code blocks
   let jsonStr = response.trim()

@@ -14,153 +14,462 @@
     <div class="card mb-4">
       <h2 class="font-semibold text-gray-800 mb-4">API 配置</h2>
 
-      <!-- Provider -->
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-600 mb-1">AI提供商</label>
-        <select
-          :value="settingsStore.api.provider"
-          @change="settingsStore.setProvider($event.target.value)"
-          class="input-field"
-        >
-          <option value="openai">OpenAI (GPT-4o)</option>
-          <option value="qwen">通义千问</option>
-          <option value="zhipu">智谱 AI (GLM)</option>
-          <option value="claude">Claude</option>
-          <option value="custom">自定义</option>
-        </select>
-      </div>
-
-      <!-- API Key -->
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-600 mb-1">API Key</label>
-        <div class="relative">
-          <input
-            :type="showApiKey ? 'text' : 'password'"
-            :value="settingsStore.api.apiKey"
-            @input="settingsStore.setApiKey($event.target.value)"
-            placeholder="输入你的API Key"
-            class="input-field pr-10"
-          />
-          <button
-            @click="showApiKey = !showApiKey"
-            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-          >
-            <svg v-if="showApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-            </svg>
-            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Model -->
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-600 mb-1">文本模型ID</label>
-        <div class="flex gap-2">
-          <input
-            :value="settingsStore.api.model"
-            @input="settingsStore.setModel($event.target.value)"
-            placeholder="例如: gpt-4o, glm-4-plus"
-            class="input-field flex-1"
-          />
-          <button
-            @click="handleValidateModel"
-            :disabled="validating || !settingsStore.api.apiKey || !settingsStore.api.model"
-            class="btn-outline text-xs whitespace-nowrap"
-          >
-            {{ validating ? '验证中...' : '验证' }}
-          </button>
-        </div>
-        <p class="text-xs text-gray-400 mt-1">用于分析长难句的文本模型</p>
-      </div>
-
-      <!-- Vision Model -->
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-600 mb-1">视觉模型ID</label>
-        <div class="flex gap-2">
-          <input
-            :value="settingsStore.api.visionModel"
-            @input="settingsStore.setVisionModel($event.target.value)"
-            placeholder="例如: gpt-4o, glm-4v-plus, qwen-vl-plus"
-            class="input-field flex-1"
-          />
-          <button
-            @click="handleValidateVisionModel"
-            :disabled="validatingVision || !settingsStore.api.apiKey || !settingsStore.api.visionModel"
-            class="btn-outline text-xs whitespace-nowrap"
-          >
-            {{ validatingVision ? '验证中...' : '验证' }}
-          </button>
-        </div>
-        <p class="text-xs text-gray-400 mt-1">用于拍照识别图片中的文字，需支持vision能力</p>
-      </div>
-
-      <!-- Advanced: Endpoint -->
-      <div class="mb-4">
+      <!-- Mode Switch -->
+      <div class="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
         <button
-          @click="showAdvanced = !showAdvanced"
-          class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+          @click="settingsStore.useMode = 'simple'"
+          class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors text-center"
+          :class="settingsStore.useMode === 'simple'
+            ? 'bg-white shadow text-blue-600'
+            : 'text-gray-500 hover:text-gray-700'"
         >
-          <svg
-            class="w-4 h-4 transition-transform"
-            :class="{ 'rotate-90': showAdvanced }"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-          高级选项
+          简单模式
         </button>
-        <div v-if="showAdvanced" class="mt-2">
-          <label class="block text-sm font-medium text-gray-600 mb-1">API 端点</label>
-          <input
-            :value="settingsStore.api.endpoint"
-            @input="settingsStore.setEndpoint($event.target.value)"
-            placeholder="https://api.openai.com/v1/chat/completions"
+        <button
+          @click="settingsStore.useMode = 'advanced'"
+          class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors text-center"
+          :class="settingsStore.useMode === 'advanced'
+            ? 'bg-white shadow text-blue-600'
+            : 'text-gray-500 hover:text-gray-700'"
+        >
+          专业模式
+        </button>
+      </div>
+      <p class="text-xs text-gray-400 mb-4">
+        {{ settingsStore.useMode === 'simple'
+          ? '只需配置一个多模态视觉模型，同时用于图片识别和句子分析'
+          : '分别配置视觉模型（OCR）和文本模型（分析），速度更快、成本更低' }}
+      </p>
+
+      <!-- ===== Simple Mode: single config ===== -->
+      <template v-if="settingsStore.useMode === 'simple'">
+        <p class="text-xs text-gray-400 mb-3">选择一个支持视觉能力的多模态模型</p>
+
+        <!-- Provider -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-600 mb-1">AI提供商</label>
+          <select
+            :value="settingsStore.visionApi.provider"
+            @change="settingsStore.setVisionProvider($event.target.value)"
             class="input-field"
-          />
+          >
+            <option value="openai">OpenAI (GPT-4o)</option>
+            <option value="qwen">通义千问</option>
+            <option value="zhipu">智谱 AI (GLM)</option>
+            <option value="siliconflow">硅基流动 (SiliconFlow)</option>
+            <option value="claude">Claude</option>
+            <option value="custom">自定义</option>
+          </select>
         </div>
-      </div>
 
-      <!-- Test connection -->
-      <div class="flex flex-wrap gap-2">
-        <button
-          @click="handleTestConnection"
-          :disabled="testing || !settingsStore.api.apiKey || !settingsStore.api.model"
-          class="btn-primary text-sm"
+        <!-- API Format (custom only) -->
+        <div v-if="settingsStore.visionApi.provider === 'custom'" class="mb-4">
+          <label class="block text-sm font-medium text-gray-600 mb-1">API 格式</label>
+          <select
+            :value="settingsStore.visionApi.apiFormat"
+            @change="settingsStore.visionApi.apiFormat = $event.target.value"
+            class="input-field"
+          >
+            <option value="openai">OpenAI 兼容格式</option>
+            <option value="claude">Claude 格式</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">大多数第三方服务使用 OpenAI 兼容格式</p>
+        </div>
+
+        <!-- API Key -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-600 mb-1">API Key</label>
+          <div class="relative">
+            <input
+              :type="showVisionApiKey ? 'text' : 'password'"
+              :value="settingsStore.visionApi.apiKey"
+              @input="settingsStore.visionApi.apiKey = $event.target.value"
+              placeholder="输入你的API Key"
+              class="input-field pr-10"
+            />
+            <button
+              @click="showVisionApiKey = !showVisionApiKey"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <svg v-if="showVisionApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+              </svg>
+              <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Model -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-600 mb-1">模型ID</label>
+          <div class="flex gap-2">
+            <input
+              :value="settingsStore.visionApi.model"
+              @input="settingsStore.visionApi.model = $event.target.value"
+              placeholder="例如: gpt-4o, Qwen2.5-VL-72B-Instruct"
+              class="input-field flex-1"
+            />
+            <button
+              @click="handleValidateVisionModel"
+              :disabled="validatingVision || !settingsStore.visionApi.apiKey || !settingsStore.visionApi.model"
+              class="btn-outline text-xs whitespace-nowrap"
+            >
+              {{ validatingVision ? '验证中...' : '验证' }}
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">需选择支持视觉能力的多模态模型，纯文本模型无法识别图片</p>
+        </div>
+
+        <!-- Advanced: Endpoint -->
+        <div class="mb-4">
+          <button
+            @click="showVisionAdvanced = !showVisionAdvanced"
+            class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+          >
+            <svg
+              class="w-4 h-4 transition-transform"
+              :class="{ 'rotate-90': showVisionAdvanced }"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+            高级选项
+          </button>
+          <div v-if="showVisionAdvanced" class="mt-2">
+            <label class="block text-sm font-medium text-gray-600 mb-1">API 端点</label>
+            <input
+              :value="settingsStore.visionApi.endpoint"
+              @input="settingsStore.visionApi.endpoint = $event.target.value"
+              placeholder="https://api.openai.com/v1/chat/completions"
+              class="input-field"
+            />
+          </div>
+        </div>
+
+        <!-- Test -->
+        <div class="flex flex-wrap gap-2">
+          <button
+            @click="handleTestVisionConnection"
+            :disabled="testingVision || !settingsStore.visionApi.apiKey || !settingsStore.visionApi.model"
+            class="btn-primary text-sm"
+          >
+            {{ testingVision ? '测试中...' : '测试连接' }}
+          </button>
+        </div>
+
+        <div
+          v-if="visionTestResult !== null"
+          class="mt-3 text-sm rounded-lg p-3"
+          :class="visionTestResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
         >
-          {{ testing ? '测试中...' : '测试连接' }}
-        </button>
-      </div>
+          {{ visionTestResult.message }}
+        </div>
+        <div
+          v-if="visionValidateResult !== null"
+          class="mt-3 text-sm rounded-lg p-3"
+          :class="visionValidateResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
+        >
+          {{ visionValidateResult.message }}
+        </div>
+      </template>
 
-      <!-- Test result -->
-      <div
-        v-if="testResult !== null"
-        class="mt-3 text-sm rounded-lg p-3"
-        :class="testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-      >
-        {{ testResult.message }}
-      </div>
+      <!-- ===== Advanced Mode: dual config with tabs ===== -->
+      <template v-else>
+        <!-- Tab Switch -->
+        <div class="flex border-b border-gray-200 mb-4">
+          <button
+            @click="activeTab = 'text'"
+            class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+            :class="activeTab === 'text'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'"
+          >
+            文本模型
+          </button>
+          <button
+            @click="activeTab = 'vision'"
+            class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+            :class="activeTab === 'vision'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'"
+          >
+            视觉模型
+          </button>
+        </div>
 
-      <div
-        v-if="validateResult !== null"
-        class="mt-3 text-sm rounded-lg p-3"
-        :class="validateResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-      >
-        {{ validateResult.message }}
-      </div>
+        <!-- Text API Config -->
+        <div v-show="activeTab === 'text'">
+          <p class="text-xs text-gray-400 mb-3">用于分析长难句的文本模型</p>
 
-      <div
-        v-if="validateVisionResult !== null"
-        class="mt-3 text-sm rounded-lg p-3"
-        :class="validateVisionResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-      >
-        {{ validateVisionResult.message }}
-      </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-600 mb-1">AI提供商</label>
+            <select
+              :value="settingsStore.textApi.provider"
+              @change="settingsStore.setTextProvider($event.target.value)"
+              class="input-field"
+            >
+              <option value="openai">OpenAI (GPT-4o)</option>
+              <option value="qwen">通义千问</option>
+              <option value="zhipu">智谱 AI (GLM)</option>
+              <option value="siliconflow">硅基流动 (SiliconFlow)</option>
+              <option value="claude">Claude</option>
+              <option value="custom">自定义</option>
+            </select>
+          </div>
+
+          <div v-if="settingsStore.textApi.provider === 'custom'" class="mb-4">
+            <label class="block text-sm font-medium text-gray-600 mb-1">API 格式</label>
+            <select
+              :value="settingsStore.textApi.apiFormat"
+              @change="settingsStore.textApi.apiFormat = $event.target.value"
+              class="input-field"
+            >
+              <option value="openai">OpenAI 兼容格式</option>
+              <option value="claude">Claude 格式</option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">大多数第三方服务使用 OpenAI 兼容格式</p>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-600 mb-1">API Key</label>
+            <div class="relative">
+              <input
+                :type="showTextApiKey ? 'text' : 'password'"
+                :value="settingsStore.textApi.apiKey"
+                @input="settingsStore.textApi.apiKey = $event.target.value"
+                placeholder="输入你的API Key"
+                class="input-field pr-10"
+              />
+              <button
+                @click="showTextApiKey = !showTextApiKey"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg v-if="showTextApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                </svg>
+                <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-600 mb-1">模型ID</label>
+            <div class="flex gap-2">
+              <input
+                :value="settingsStore.textApi.model"
+                @input="settingsStore.textApi.model = $event.target.value"
+                placeholder="例如: gpt-4o, glm-4-plus"
+                class="input-field flex-1"
+              />
+              <button
+                @click="handleValidateTextModel"
+                :disabled="validatingText || !settingsStore.textApi.apiKey || !settingsStore.textApi.model"
+                class="btn-outline text-xs whitespace-nowrap"
+              >
+                {{ validatingText ? '验证中...' : '验证' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <button
+              @click="showTextAdvanced = !showTextAdvanced"
+              class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+            >
+              <svg
+                class="w-4 h-4 transition-transform"
+                :class="{ 'rotate-90': showTextAdvanced }"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+              高级选项
+            </button>
+            <div v-if="showTextAdvanced" class="mt-2">
+              <label class="block text-sm font-medium text-gray-600 mb-1">API 端点</label>
+              <input
+                :value="settingsStore.textApi.endpoint"
+                @input="settingsStore.textApi.endpoint = $event.target.value"
+                placeholder="https://api.openai.com/v1/chat/completions"
+                class="input-field"
+              />
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <button
+              @click="handleTestTextConnection"
+              :disabled="testingText || !settingsStore.textApi.apiKey || !settingsStore.textApi.model"
+              class="btn-primary text-sm"
+            >
+              {{ testingText ? '测试中...' : '测试连接' }}
+            </button>
+          </div>
+
+          <div
+            v-if="textTestResult !== null"
+            class="mt-3 text-sm rounded-lg p-3"
+            :class="textTestResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
+          >
+            {{ textTestResult.message }}
+          </div>
+          <div
+            v-if="textValidateResult !== null"
+            class="mt-3 text-sm rounded-lg p-3"
+            :class="textValidateResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
+          >
+            {{ textValidateResult.message }}
+          </div>
+        </div>
+
+        <!-- Vision API Config -->
+        <div v-show="activeTab === 'vision'">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-xs text-gray-400">用于拍照识别图片中的文字</p>
+            <button
+              @click="handleCopyTextToVision"
+              class="text-xs text-blue-500 hover:text-blue-700 whitespace-nowrap"
+            >
+              从文本配置复制
+            </button>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-600 mb-1">AI提供商</label>
+            <select
+              :value="settingsStore.visionApi.provider"
+              @change="settingsStore.setVisionProvider($event.target.value)"
+              class="input-field"
+            >
+              <option value="openai">OpenAI (GPT-4o)</option>
+              <option value="qwen">通义千问</option>
+              <option value="zhipu">智谱 AI (GLM)</option>
+              <option value="siliconflow">硅基流动 (SiliconFlow)</option>
+              <option value="claude">Claude</option>
+              <option value="custom">自定义</option>
+            </select>
+          </div>
+
+          <div v-if="settingsStore.visionApi.provider === 'custom'" class="mb-4">
+            <label class="block text-sm font-medium text-gray-600 mb-1">API 格式</label>
+            <select
+              :value="settingsStore.visionApi.apiFormat"
+              @change="settingsStore.visionApi.apiFormat = $event.target.value"
+              class="input-field"
+            >
+              <option value="openai">OpenAI 兼容格式</option>
+              <option value="claude">Claude 格式</option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">大多数第三方服务使用 OpenAI 兼容格式</p>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-600 mb-1">API Key</label>
+            <div class="relative">
+              <input
+                :type="showVisionApiKey ? 'text' : 'password'"
+                :value="settingsStore.visionApi.apiKey"
+                @input="settingsStore.visionApi.apiKey = $event.target.value"
+                placeholder="输入你的API Key"
+                class="input-field pr-10"
+              />
+              <button
+                @click="showVisionApiKey = !showVisionApiKey"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg v-if="showVisionApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                </svg>
+                <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-600 mb-1">模型ID</label>
+            <div class="flex gap-2">
+              <input
+                :value="settingsStore.visionApi.model"
+                @input="settingsStore.visionApi.model = $event.target.value"
+                placeholder="例如: gpt-4o, glm-4v-plus, qwen-vl-plus"
+                class="input-field flex-1"
+              />
+              <button
+                @click="handleValidateVisionModel"
+                :disabled="validatingVision || !settingsStore.visionApi.apiKey || !settingsStore.visionApi.model"
+                class="btn-outline text-xs whitespace-nowrap"
+              >
+                {{ validatingVision ? '验证中...' : '验证' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <button
+              @click="showVisionAdvanced = !showVisionAdvanced"
+              class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+            >
+              <svg
+                class="w-4 h-4 transition-transform"
+                :class="{ 'rotate-90': showVisionAdvanced }"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+              高级选项
+            </button>
+            <div v-if="showVisionAdvanced" class="mt-2">
+              <label class="block text-sm font-medium text-gray-600 mb-1">API 端点</label>
+              <input
+                :value="settingsStore.visionApi.endpoint"
+                @input="settingsStore.visionApi.endpoint = $event.target.value"
+                placeholder="https://api.openai.com/v1/chat/completions"
+                class="input-field"
+              />
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <button
+              @click="handleTestVisionConnection"
+              :disabled="testingVision || !settingsStore.visionApi.apiKey || !settingsStore.visionApi.model"
+              class="btn-primary text-sm"
+            >
+              {{ testingVision ? '测试中...' : '测试连接' }}
+            </button>
+          </div>
+
+          <div
+            v-if="visionTestResult !== null"
+            class="mt-3 text-sm rounded-lg p-3"
+            :class="visionTestResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
+          >
+            {{ visionTestResult.message }}
+          </div>
+          <div
+            v-if="visionValidateResult !== null"
+            class="mt-3 text-sm rounded-lg p-3"
+            :class="visionValidateResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
+          >
+            {{ visionValidateResult.message }}
+          </div>
+          <div
+            v-if="copySuccess"
+            class="mt-3 text-sm rounded-lg p-3 bg-green-50 text-green-700"
+          >
+            已从文本模型配置复制
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- Data Management -->
@@ -168,7 +477,6 @@
       <h2 class="font-semibold text-gray-800 mb-4">数据管理</h2>
 
       <div class="space-y-3">
-        <!-- Export -->
         <button @click="handleExport" class="btn-outline text-sm w-full text-left flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -205,7 +513,6 @@
           <p class="text-xs text-gray-500">{{ markdownScopeHint }}</p>
         </div>
 
-        <!-- Import -->
         <label class="btn-outline text-sm w-full text-left flex items-center gap-2 cursor-pointer">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -214,7 +521,6 @@
           <input type="file" accept=".json" @change="handleImport" class="hidden" />
         </label>
 
-        <!-- Clear -->
         <button
           @click="showClearConfirm = true"
           class="btn-danger text-sm w-full text-left flex items-center gap-2"
@@ -226,7 +532,6 @@
         </button>
       </div>
 
-      <!-- Import result -->
       <div
         v-if="importResult"
         class="mt-3 text-sm rounded-lg p-3"
@@ -264,14 +569,23 @@ import { buildMarkdownDocument, downloadMarkdown } from '../utils/export.js'
 const settingsStore = useSettingsStore()
 const sentencesStore = useSentencesStore()
 
-const showApiKey = ref(false)
-const showAdvanced = ref(false)
-const testing = ref(false)
-const testResult = ref(null)
-const validating = ref(false)
-const validateResult = ref(null)
+const activeTab = ref('text')
+const showTextApiKey = ref(false)
+const showVisionApiKey = ref(false)
+const showTextAdvanced = ref(false)
+const showVisionAdvanced = ref(false)
+
+const testingText = ref(false)
+const textTestResult = ref(null)
+const validatingText = ref(false)
+const textValidateResult = ref(null)
+
+const testingVision = ref(false)
+const visionTestResult = ref(null)
 const validatingVision = ref(false)
-const validateVisionResult = ref(null)
+const visionValidateResult = ref(null)
+
+const copySuccess = ref(false)
 const showClearConfirm = ref(false)
 const importResult = ref(null)
 const markdownExportScope = ref('all')
@@ -295,64 +609,74 @@ const markdownScopeHint = computed(() => {
   return '导出全部已分析句子'
 })
 
-async function handleTestConnection() {
-  testing.value = true
-  testResult.value = null
-
+async function handleTestTextConnection() {
+  testingText.value = true
+  textTestResult.value = null
   try {
-    const ok = await testConnection()
-    testResult.value = {
+    const ok = await testConnection(settingsStore.textApi)
+    textTestResult.value = {
       success: ok,
       message: ok ? 'API连接成功！' : 'API返回了异常结果，请检查配置',
     }
   } catch (err) {
-    testResult.value = {
-      success: false,
-      message: err.message || '连接失败',
-    }
+    textTestResult.value = { success: false, message: err.message || '连接失败' }
   } finally {
-    testing.value = false
+    testingText.value = false
   }
 }
 
-async function handleValidateModel() {
-  validating.value = true
-  validateResult.value = null
-
+async function handleValidateTextModel() {
+  validatingText.value = true
+  textValidateResult.value = null
   try {
-    const ok = await validateModel(settingsStore.api.model)
-    validateResult.value = {
+    const ok = await validateModel(settingsStore.textApi)
+    textValidateResult.value = {
       success: ok,
-      message: ok ? `文本模型「${settingsStore.api.model}」可用` : '模型不可用，请检查模型ID是否正确',
+      message: ok ? `文本模型「${settingsStore.textApi.model}」可用` : '模型不可用，请检查模型ID是否正确',
     }
   } catch (err) {
-    validateResult.value = {
-      success: false,
-      message: err.message || '验证失败',
-    }
+    textValidateResult.value = { success: false, message: err.message || '验证失败' }
   } finally {
-    validating.value = false
+    validatingText.value = false
+  }
+}
+
+async function handleTestVisionConnection() {
+  testingVision.value = true
+  visionTestResult.value = null
+  try {
+    const ok = await testConnection(settingsStore.visionApi)
+    visionTestResult.value = {
+      success: ok,
+      message: ok ? 'API连接成功！' : 'API返回了异常结果，请检查配置',
+    }
+  } catch (err) {
+    visionTestResult.value = { success: false, message: err.message || '连接失败' }
+  } finally {
+    testingVision.value = false
   }
 }
 
 async function handleValidateVisionModel() {
   validatingVision.value = true
-  validateVisionResult.value = null
-
+  visionValidateResult.value = null
   try {
-    const ok = await validateModel(settingsStore.api.visionModel)
-    validateVisionResult.value = {
+    const ok = await validateModel(settingsStore.visionApi)
+    visionValidateResult.value = {
       success: ok,
-      message: ok ? `视觉模型「${settingsStore.api.visionModel}」可用` : '模型不可用，请检查模型ID是否正确',
+      message: ok ? `模型「${settingsStore.visionApi.model}」可用` : '模型不可用，请检查模型ID是否正确',
     }
   } catch (err) {
-    validateVisionResult.value = {
-      success: false,
-      message: err.message || '验证失败',
-    }
+    visionValidateResult.value = { success: false, message: err.message || '验证失败' }
   } finally {
     validatingVision.value = false
   }
+}
+
+function handleCopyTextToVision() {
+  settingsStore.copyTextToVision()
+  copySuccess.value = true
+  setTimeout(() => { copySuccess.value = false }, 2000)
 }
 
 function handleExport() {
@@ -368,15 +692,11 @@ function handleExport() {
 
 function handleExportMarkdown() {
   let list = []
-
   if (markdownExportScope.value === 'current') {
     list = sentencesStore.filteredSentences.filter((sentence) => sentence.analysis)
   } else if (markdownExportScope.value === 'tag') {
     if (!markdownExportTag.value) {
-      importResult.value = {
-        success: false,
-        message: '请先选择标签，再执行 Markdown 导出',
-      }
+      importResult.value = { success: false, message: '请先选择标签，再执行 Markdown 导出' }
       return
     }
     list = sentencesStore.sentences.filter(
@@ -385,43 +705,26 @@ function handleExportMarkdown() {
   } else {
     list = sentencesStore.sentences.filter((sentence) => sentence.analysis)
   }
-
   if (list.length === 0) {
-    importResult.value = {
-      success: false,
-      message: '当前范围内无可导出的分析结果，请调整筛选或先完成句子分析',
-    }
+    importResult.value = { success: false, message: '当前范围内无可导出的分析结果，请调整筛选或先完成句子分析' }
     return
   }
-
   const markdown = buildMarkdownDocument(list, '英语长难句笔记导出')
   downloadMarkdown(markdown, 'sentence-notebook')
-  importResult.value = {
-    success: true,
-    message: `Markdown 导出完成，共 ${list.length} 条句子`,
-  }
+  importResult.value = { success: true, message: `Markdown 导出完成，共 ${list.length} 条句子` }
 }
 
 async function handleImport(event) {
   const file = event.target.files?.[0]
   if (!file) return
-
   importResult.value = null
-
   try {
     const text = await file.text()
     await sentencesStore.importData(text)
-    importResult.value = {
-      success: true,
-      message: `成功导入数据！当前共 ${sentencesStore.sentences.length} 条句子`,
-    }
+    importResult.value = { success: true, message: `成功导入数据！当前共 ${sentencesStore.sentences.length} 条句子` }
   } catch (err) {
-    importResult.value = {
-      success: false,
-      message: `导入失败: ${err.message}`,
-    }
+    importResult.value = { success: false, message: `导入失败: ${err.message}` }
   }
-
   event.target.value = ''
 }
 

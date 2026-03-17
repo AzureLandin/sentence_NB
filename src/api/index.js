@@ -1,16 +1,26 @@
-import { useSettingsStore } from '../stores/settings.js'
+/**
+ * Determine if an API config uses Claude format.
+ * @param {object} apiConfig - { provider, apiFormat, apiKey, endpoint, model }
+ * @returns {boolean}
+ */
+function isClaudeFormat(apiConfig) {
+  return apiConfig.apiFormat === 'claude'
+}
 
-export async function chatCompletion(messages, options = {}) {
-  const settings = useSettingsStore()
-  const { api } = settings
+/**
+ * Send a chat completion request using the provided API config.
+ * @param {Array} messages - Chat messages
+ * @param {object} apiConfig - API configuration { provider, apiFormat, apiKey, endpoint, model }
+ * @param {object} options - Additional request options
+ */
+export async function chatCompletion(messages, apiConfig, options = {}) {
+  const { apiKey, endpoint, model } = apiConfig
 
-  const model = options.model || api.model
-
-  if (!api.apiKey) {
+  if (!apiKey) {
     throw new Error('请先在设置中配置API Key')
   }
 
-  if (!api.endpoint) {
+  if (!endpoint) {
     throw new Error('请先在设置中配置API端点')
   }
 
@@ -24,8 +34,8 @@ export async function chatCompletion(messages, options = {}) {
 
   let body
 
-  if (api.provider === 'claude') {
-    headers['x-api-key'] = api.apiKey
+  if (isClaudeFormat(apiConfig)) {
+    headers['x-api-key'] = apiKey
     headers['anthropic-version'] = '2023-06-01'
     headers['anthropic-dangerous-direct-browser-access'] = 'true'
 
@@ -36,26 +46,24 @@ export async function chatCompletion(messages, options = {}) {
         role: m.role === 'system' ? 'user' : m.role,
         content: m.content,
       })),
+      ...options,
     }
-    delete options.model
-    Object.assign(body, options)
   } else {
-    headers['Authorization'] = `Bearer ${api.apiKey}`
+    headers['Authorization'] = `Bearer ${apiKey}`
 
     body = {
       model,
       messages,
       temperature: 0.3,
+      ...options,
     }
-    delete options.model
-    Object.assign(body, options)
   }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 60000)
 
   try {
-    const response = await fetch(api.endpoint, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -80,11 +88,12 @@ export async function chatCompletion(messages, options = {}) {
 
     const data = await response.json()
 
-    if (api.provider === 'claude') {
+    if (isClaudeFormat(apiConfig)) {
       return data.content?.[0]?.text || ''
     }
 
-    return data.choices?.[0]?.message?.content || ''
+    const message = data.choices?.[0]?.message
+    return message?.content || ''
   } catch (err) {
     if (err.name === 'AbortError') {
       throw new Error('请求超时，请检查网络连接')
@@ -95,26 +104,25 @@ export async function chatCompletion(messages, options = {}) {
   }
 }
 
-export async function testConnection() {
+export async function testConnection(apiConfig) {
   const result = await chatCompletion([
-    { role: 'user', content: 'Reply with exactly: OK' },
-  ])
-  return result.includes('OK')
+    { role: 'user', content: 'Hi' },
+  ], apiConfig)
+  return result.length > 0
 }
 
-export async function validateModel(modelId) {
-  const settings = useSettingsStore()
-  const { api } = settings
+export async function validateModel(apiConfig) {
+  const { apiKey, endpoint, model } = apiConfig
 
-  if (!api.apiKey) {
+  if (!apiKey) {
     throw new Error('请先配置API Key')
   }
 
-  if (!api.endpoint) {
+  if (!endpoint) {
     throw new Error('请先配置API端点')
   }
 
-  if (!modelId) {
+  if (!model) {
     throw new Error('请输入模型ID')
   }
 
@@ -124,21 +132,21 @@ export async function validateModel(modelId) {
 
   let body
 
-  if (api.provider === 'claude') {
-    headers['x-api-key'] = api.apiKey
+  if (isClaudeFormat(apiConfig)) {
+    headers['x-api-key'] = apiKey
     headers['anthropic-version'] = '2023-06-01'
     headers['anthropic-dangerous-direct-browser-access'] = 'true'
 
     body = {
-      model: modelId,
+      model,
       max_tokens: 10,
       messages: [{ role: 'user', content: 'Hi' }],
     }
   } else {
-    headers['Authorization'] = `Bearer ${api.apiKey}`
+    headers['Authorization'] = `Bearer ${apiKey}`
 
     body = {
-      model: modelId,
+      model,
       messages: [{ role: 'user', content: 'Hi' }],
       max_tokens: 10,
     }
@@ -148,7 +156,7 @@ export async function validateModel(modelId) {
   const timeout = setTimeout(() => controller.abort(), 30000)
 
   try {
-    const response = await fetch(api.endpoint, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),

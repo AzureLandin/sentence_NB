@@ -60,7 +60,7 @@
 
     <!-- API Warning -->
     <div
-      v-if="!settingsStore.isConfigured()"
+      v-if="!settingsStore.isAnalysisConfigured()"
       class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800"
     >
       尚未配置AI API。请前往
