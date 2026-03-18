@@ -113,7 +113,6 @@ export const useSentencesStore = defineStore('sentences', () => {
     const idx = sentences.value.findIndex((s) => s.id === id)
     if (idx === -1) return null
 
-    // Deep clone to strip Vue reactivity proxies
     const existingData = JSON.parse(JSON.stringify(sentences.value[idx]))
     const updatesData = JSON.parse(JSON.stringify(updates))
 
@@ -124,6 +123,12 @@ export const useSentencesStore = defineStore('sentences', () => {
     }
     await dbSave(updated)
     sentences.value[idx] = updated
+    // 入同步队列
+    try {
+      const { useSyncStore } = await import('./sync.js')
+      const syncStore = useSyncStore()
+      await syncStore.addToQueue(buildOp('upsert', updated))
+    } catch { /* 未登录时静默跳过 */ }
     return updated
   }
 

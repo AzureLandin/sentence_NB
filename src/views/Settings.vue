@@ -541,6 +541,72 @@
       </div>
     </div>
 
+    <!-- Account Section -->
+    <div class="card mb-4">
+      <h2 class="font-semibold text-gray-800 mb-4">账号与同步</h2>
+
+      <!-- 已登录 -->
+      <template v-if="authStore.isLoggedIn">
+        <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg mb-3">
+          <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
+            {{ authStore.user?.displayName?.[0]?.toUpperCase() || '?' }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-800 truncate">{{ authStore.user?.displayName }}</p>
+            <p class="text-xs text-gray-500 truncate">{{ authStore.user?.email }}</p>
+          </div>
+          <!-- 同步状态点 -->
+          <span class="flex items-center gap-1 text-xs" :class="syncStatusColor">
+            <span class="w-2 h-2 rounded-full" :class="syncDotClass"></span>
+            {{ syncStatusText }}
+          </span>
+        </div>
+
+        <!-- 同步统计 -->
+        <div class="grid grid-cols-3 gap-2 mb-3 text-center">
+          <div class="bg-gray-50 rounded-lg p-2">
+            <p class="text-xs text-gray-500">上次同步</p>
+            <p class="text-xs font-medium text-gray-700">{{ lastSyncText }}</p>
+          </div>
+          <div class="bg-yellow-50 rounded-lg p-2 cursor-pointer" @click="showConflicts = !showConflicts">
+            <p class="text-xs text-yellow-600">冲突</p>
+            <p class="text-xs font-medium text-yellow-700">{{ syncStore.conflictCount }}</p>
+          </div>
+          <div class="bg-red-50 rounded-lg p-2">
+            <p class="text-xs text-red-600">死信</p>
+            <p class="text-xs font-medium text-red-700">{{ syncStore.deadLetterCount }}</p>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button
+            @click="handleManualSync"
+            :disabled="syncStore.status === 'syncing'"
+            class="btn-outline text-sm flex-1 flex items-center justify-center gap-1"
+          >
+            <svg class="w-3.5 h-3.5" :class="syncStore.status === 'syncing' ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            立即同步
+          </button>
+          <button @click="handleLogout" :disabled="authStore.loading" class="btn-outline text-sm flex-1">
+            {{ authStore.loading ? '退出中…' : '退出登录' }}
+          </button>
+        </div>
+      </template>
+
+      <!-- 未登录 -->
+      <template v-else>
+        <p class="text-sm text-gray-500 mb-3">登录后可将句子同步到云端，跨设备访问。</p>
+        <router-link to="/login" class="btn-primary text-sm w-full flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+          </svg>
+          登录 / 注册
+        </router-link>
+      </template>
+    </div>
+
     <!-- Clear confirmation dialog -->
     <div
       v-if="showClearConfirm"
@@ -562,12 +628,63 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useSettingsStore, useSentencesStore } from '../stores/index.js'
+import { useAuthStore } from '../stores/auth.js'
+import { useSyncStore } from '../stores/sync.js'
 import { testConnection, validateModel } from '../api/index.js'
 import { buildMarkdownDocument, downloadMarkdown } from '../utils/export.js'
 
+const router = useRouter()
 const settingsStore = useSettingsStore()
 const sentencesStore = useSentencesStore()
+const authStore = useAuthStore()
+const syncStore = useSyncStore()
+
+const showConflicts = ref(false)
+
+const syncStatusText = computed(() => {
+  const s = syncStore.status
+  if (s === 'syncing') return '同步中'
+  if (s === 'error') return '同步失败'
+  if (s === 'offline') return '离线'
+  return '已同步'
+})
+
+const syncStatusColor = computed(() => {
+  const s = syncStore.status
+  if (s === 'syncing') return 'text-blue-500'
+  if (s === 'error') return 'text-red-500'
+  if (s === 'offline') return 'text-gray-400'
+  return 'text-green-500'
+})
+
+const syncDotClass = computed(() => {
+  const s = syncStore.status
+  if (s === 'syncing') return 'bg-blue-400 animate-pulse'
+  if (s === 'error') return 'bg-red-400'
+  if (s === 'offline') return 'bg-gray-400'
+  return 'bg-green-400'
+})
+
+const lastSyncText = computed(() => {
+  if (!syncStore.lastSyncAt) return '从未'
+  const diff = Date.now() - syncStore.lastSyncAt
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
+  return `${Math.floor(diff / 3600000)}小时前`
+})
+
+async function handleManualSync() {
+  await syncStore.incrementalPull()
+  await syncStore.flushQueue()
+}
+
+async function handleLogout() {
+  await authStore.doLogout()
+  syncStore.stopPeriodicPull()
+  router.push('/')
+}
 
 const activeTab = ref('text')
 const showTextApiKey = ref(false)

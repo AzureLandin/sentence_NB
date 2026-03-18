@@ -68,6 +68,7 @@ export const useSyncStore = defineStore('sync', () => {
     status.value = 'syncing'
     try {
       await _fullPullAndMerge()
+      await _migrateLocalData()
       await flushQueue()
       startPeriodicPull()
       status.value = 'idle'
@@ -83,6 +84,7 @@ export const useSyncStore = defineStore('sync', () => {
     clearCursor()
     let cursor = null
     let hasMore = true
+    const serverIds = new Set()
 
     while (hasMore) {
       let result
@@ -98,6 +100,13 @@ export const useSyncStore = defineStore('sync', () => {
         }
       }
 
+      // 记录服务端已有的 sentence ID，供首登迁移使用
+      for (const change of result.changes) {
+        if (change.entityType === 'sentence') {
+          serverIds.add(change.entityId)
+        }
+      }
+
       await _applyChanges(result.changes)
       cursor = result.nextCursor
       hasMore = result.hasMore
@@ -105,6 +114,39 @@ export const useSyncStore = defineStore('sync', () => {
 
     saveCursor(cursor)
     lastSyncAt.value = Date.now()
+    return serverIds
+  }
+
+  // ── 首登迁移：将本地已有数据推送到服务端 ────────────────
+
+  async function _migrateLocalData() {
+    const { getAllSentences } = await import('../utils/storage.js')
+    const localSentences = await getAllSentences()
+    if (!localSentences || localSentences.length === 0) return
+
+    // 只处理未删除、且没有 _version（说明是首次登录前创建的老数据）
+    const toMigrate = localSentences.filter(
+      (s) => !s.deletedAt && (s._version === undefined || s._version === 0)
+    )
+    if (toMigrate.length === 0) return
+
+    for (const s of toMigrate) {
+      const op = {
+        opId: 'op_migrate_' + s.id.replace(/-/g, ''),
+        entityType: 'sentence',
+        entityId: s.id,
+        action: 'create',
+        baseVersion: 0,
+        payload: {
+          content: s.content,
+          tags: s.tags || [],
+          analysis: s.analysis || null,
+          source: s.source || 'text',
+        },
+        clientUpdatedAt: new Date(s.updatedAt || s.createdAt || Date.now()).toISOString(),
+      }
+      await enqueue(op)
+    }
   }
 
   // ── 增量拉取 ──────────────────────────────────────────
