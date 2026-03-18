@@ -198,7 +198,7 @@ const breadcrumbs = computed(() => {
 
 // 网络状态监听
 function handleOnline() { syncStore.onNetworkRestore() }
-function handleOffline() { syncStore.status = 'offline' }
+function handleOffline() { syncStore.setOffline() }
 
 onMounted(async () => {
   window.addEventListener('online', handleOnline)

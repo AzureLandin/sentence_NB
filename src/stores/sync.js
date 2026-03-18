@@ -245,6 +245,10 @@ export const useSyncStore = defineStore('sync', () => {
     }
   }
 
+  function setOffline() {
+    status.value = 'offline'
+  }
+
   return {
     status,
     lastSyncAt,
@@ -258,5 +262,6 @@ export const useSyncStore = defineStore('sync', () => {
     startPeriodicPull,
     stopPeriodicPull,
     onNetworkRestore,
+    setOffline,
   }
 })
