@@ -75,12 +75,15 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="max-w-3xl mx-auto px-4 py-6 pb-20 sm:pb-6">
+    <main class="max-w-3xl mx-auto px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6">
       <router-view />
     </main>
 
     <!-- Bottom Nav Bar (mobile only) -->
-    <nav class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
+    <nav
+      class="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40"
+      style="padding-bottom: env(safe-area-inset-bottom)"
+    >
       <div class="flex items-center justify-around h-14">
         <router-link
           to="/text-input"

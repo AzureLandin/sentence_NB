@@ -8,6 +8,18 @@ function isClaudeFormat(apiConfig) {
 }
 
 /**
+ * Create a standardized API error with retryable hint and recommended action.
+ * @param {string} message - User-facing error message
+ * @param {object} options - { retryable, recommendedAction }
+ */
+export function createApiError(message, { retryable = false, recommendedAction = '' } = {}) {
+  const err = new Error(message)
+  err.retryable = retryable
+  err.recommendedAction = recommendedAction
+  return err
+}
+
+/**
  * Send a chat completion request using the provided API config.
  * @param {Array} messages - Chat messages
  * @param {object} apiConfig - API configuration { provider, apiFormat, apiKey, endpoint, model }
@@ -75,15 +87,15 @@ export async function chatCompletion(messages, apiConfig, options = {}) {
       const errorMsg = errorData.error?.message || response.statusText
 
       if (response.status === 401) {
-        throw new Error('API Key无效，请检查配置')
+        throw createApiError('API Key无效，请检查配置', { retryable: false, recommendedAction: '前往设置页面重新填写 API Key' })
       }
       if (response.status === 429) {
-        throw new Error('请求过于频繁，请稍后再试')
+        throw createApiError('请求过于频繁，请稍后再试', { retryable: true, recommendedAction: '等待几秒后重试' })
       }
       if (response.status === 404) {
-        throw new Error('模型不存在或API端点错误，请检查模型ID')
+        throw createApiError('模型不存在或API端点错误，请检查模型ID', { retryable: false, recommendedAction: '前往设置页面检查模型ID和端点' })
       }
-      throw new Error(`API请求失败: ${errorMsg}`)
+      throw createApiError(`API请求失败: ${errorMsg}`, { retryable: true, recommendedAction: '请重试' })
     }
 
     const data = await response.json()
@@ -96,7 +108,7 @@ export async function chatCompletion(messages, apiConfig, options = {}) {
     return message?.content || ''
   } catch (err) {
     if (err.name === 'AbortError') {
-      throw new Error('请求超时，请检查网络连接')
+      throw createApiError('请求超时，请检查网络连接', { retryable: true, recommendedAction: '检查网络后重试' })
     }
     throw err
   } finally {

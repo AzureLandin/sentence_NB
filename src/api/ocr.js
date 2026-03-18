@@ -1,4 +1,4 @@
-import { chatCompletion } from './index.js'
+import { chatCompletion, createApiError } from './index.js'
 import { useSettingsStore } from '../stores/settings.js'
 
 const OCR_PROMPT = `You are an OCR assistant. Read the image and extract every English sentence as a separate item.
@@ -195,10 +195,16 @@ function parseOcrResponse(response) {
   ].some((phrase) => lower.includes(phrase))
 
   if (isRefusal) {
-    throw new Error('图片中未检测到英文句子，请确认图片内容包含英文文字，或更换图片重试')
+    throw createApiError('图片中未检测到英文句子，请确认图片内容包含英文文字，或更换图片重试', {
+      retryable: false,
+      recommendedAction: '重新拍摄一张包含英文文字的图片',
+    })
   }
 
-  throw new Error('图片识别结果无法解析为英文句子，请检查图片清晰度或更换视觉模型')
+  throw createApiError('图片识别结果无法解析为英文句子，请检查图片清晰度或更换视觉模型', {
+    retryable: true,
+    recommendedAction: '重试识别，或更换更清晰的图片',
+  })
 }
 
 export async function extractSentences(base64Image) {
@@ -212,11 +218,15 @@ export async function extractSentences(base64Image) {
       settings.visionApi,
     )
   } catch (err) {
-    throw new Error(`图片识别请求失败: ${err.message}`)
+    if (err.retryable !== undefined) throw err
+    throw createApiError(`图片识别请求失败: ${err.message}`, { retryable: true, recommendedAction: '检查网络或 API 配置后重试' })
   }
 
   if (!response || response.trim().length <= 1) {
-    throw new Error('视觉模型返回了空结果，该模型可能不支持此类图片识别，请尝试更换视觉模型（推荐 Qwen2.5-VL-72B-Instruct）')
+    throw createApiError('视觉模型返回了空结果，该模型可能不支持图片识别，请尝试更换视觉模型（推荐 Qwen2.5-VL-72B-Instruct）', {
+      retryable: false,
+      recommendedAction: '前往设置页面更换支持视觉能力的模型',
+    })
   }
 
   return parseOcrResponse(response)

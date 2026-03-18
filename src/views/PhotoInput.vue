@@ -196,12 +196,32 @@
       </div>
     </div>
 
-    <div v-if="ocrError" class="mt-4 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-      <div class="flex items-start gap-2">
-        <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <!-- OCR Error: actionable recovery -->
+    <div v-if="ocrError" class="mt-4 bg-red-50 border border-red-200 rounded-xl p-4">
+      <div class="flex items-start gap-2 mb-3">
+        <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <span>{{ ocrError }}</span>
+        <p class="text-sm text-red-700">{{ ocrError }}</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-if="imageBase64"
+          @click="retryOCR"
+          class="text-xs px-3 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 font-medium transition-colors min-h-[36px]"
+        >
+          重试识别
+        </button>
+        <label class="text-xs px-3 py-2 rounded-lg bg-white hover:bg-gray-50 border border-red-200 text-red-700 font-medium transition-colors cursor-pointer min-h-[36px] flex items-center">
+          重新选图
+          <input type="file" accept="image/*" class="hidden" @change="handleFileChange" />
+        </label>
+        <router-link
+          to="/text-input"
+          class="text-xs px-3 py-2 rounded-lg bg-white hover:bg-gray-50 border border-red-200 text-red-600 font-medium transition-colors min-h-[36px] flex items-center"
+        >
+          改为文字输入
+        </router-link>
       </div>
     </div>
   </div>
@@ -390,6 +410,11 @@ async function handleBatchAnalyze() {
   currentStep.value = 'submitted'
 
   sentencesStore.addSentencesFromPhotoBackground(selectedTexts)
+}
+
+async function retryOCR() {
+  ocrError.value = ''
+  await handleOCR()
 }
 
 function resetAll() {

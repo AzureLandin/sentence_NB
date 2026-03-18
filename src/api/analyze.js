@@ -1,4 +1,4 @@
-import { chatCompletion } from './index.js'
+import { chatCompletion, createApiError } from './index.js'
 import { useSettingsStore } from '../stores/settings.js'
 
 const ANALYSIS_PROMPT = `分析这个英语句子，返回JSON对象。所有内容必须用中文！
@@ -67,7 +67,7 @@ export async function analyzeSentence(sentence) {
 
     // Validate required fields
     if (!analysis.structure || !analysis.grammar || !analysis.vocabulary || !analysis.translation) {
-      throw new Error('分析结果缺少必要字段')
+      throw createApiError('分析结果缺少必要字段，请重试', { retryable: true, recommendedAction: '重新分析' })
     }
 
     // Deep clean to ensure all data is serializable for IndexedDB
@@ -96,7 +96,7 @@ export async function analyzeSentence(sentence) {
     return cleanedAnalysis
   } catch (err) {
     if (err instanceof SyntaxError) {
-      throw new Error('AI返回的分析结果格式异常，请重试')
+      throw createApiError('AI返回的分析结果格式异常，请重试', { retryable: true, recommendedAction: '重新分析' })
     }
     throw err
   }
