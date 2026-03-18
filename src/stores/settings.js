@@ -2,6 +2,16 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { getSettings, saveSettings } from '../utils/storage.js'
 
+const SETTINGS_VERSION_KEY = 'sn_settings_version'
+
+function getSettingsVersion() {
+  return parseInt(localStorage.getItem(SETTINGS_VERSION_KEY) || '0', 10)
+}
+
+function saveSettingsVersion(v) {
+  localStorage.setItem(SETTINGS_VERSION_KEY, String(v))
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const defaultSettings = {
     useMode: 'simple',  // 'simple' | 'advanced'
@@ -160,7 +170,8 @@ export const useSettingsStore = defineStore('settings', () => {
     return visionApi.value.apiKey && visionApi.value.endpoint && visionApi.value.model
   }
 
-  // Auto-persist
+  // Auto-persist 本地 + 防抖入同步队列
+  let _syncDebounce = null
   watch([useMode, textApi, visionApi, ui], () => {
     saveSettings({
       useMode: useMode.value,
@@ -168,7 +179,50 @@ export const useSettingsStore = defineStore('settings', () => {
       visionApi: visionApi.value,
       ui: ui.value,
     })
+    // 防抖 2s 后入队，避免每次按键都入队
+    clearTimeout(_syncDebounce)
+    _syncDebounce = setTimeout(() => {
+      import('./sync.js').then(({ useSyncStore }) => {
+        const syncStore = useSyncStore()
+        const baseVersion = getSettingsVersion()
+        const payload = {
+          useMode: useMode.value,
+          textApi: JSON.parse(JSON.stringify(textApi.value)),
+          visionApi: JSON.parse(JSON.stringify(visionApi.value)),
+          ui: JSON.parse(JSON.stringify(ui.value)),
+        }
+        const op = {
+          opId: 'op_settings_' + crypto.randomUUID().replace(/-/g, ''),
+          entityType: 'setting',
+          entityId: 'settings',
+          action: 'replace',
+          baseVersion,
+          payload,
+          clientUpdatedAt: new Date().toISOString(),
+        }
+        syncStore.addToQueue(op).catch(() => {})
+      }).catch(() => {})
+    }, 2000)
   }, { deep: true })
+
+  /**
+   * 将服务端拉取的 setting 变更应用到本地（不触发同步队列）。
+   */
+  function applyRemoteChange(record) {
+    // 暂停 watch 触发同步，直接写值
+    if (record.useMode !== undefined) useMode.value = record.useMode
+    if (record.textApi !== undefined) textApi.value = record.textApi
+    if (record.visionApi !== undefined) visionApi.value = record.visionApi
+    if (record.ui !== undefined) ui.value = record.ui
+    if (record.version !== undefined) saveSettingsVersion(record.version)
+    // 同步保存到 localStorage
+    saveSettings({
+      useMode: useMode.value,
+      textApi: textApi.value,
+      visionApi: visionApi.value,
+      ui: ui.value,
+    })
+  }
 
   return {
     useMode,
@@ -182,5 +236,7 @@ export const useSettingsStore = defineStore('settings', () => {
     copyTextToVision,
     isAnalysisConfigured,
     isVisionConfigured,
+    applyRemoteChange,
+    getSettingsVersion,
   }
 })

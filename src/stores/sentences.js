@@ -9,6 +9,24 @@ import {
   clearAllSentences as dbClear,
 } from '../utils/storage.js'
 
+function buildOp(action, sentence) {
+  const payload = {
+    content: sentence.content,
+    tags: sentence.tags,
+    analysis: sentence.analysis || null,
+    source: sentence.source,
+  }
+  return {
+    opId: 'op_' + crypto.randomUUID().replace(/-/g, ''),
+    entityType: 'sentence',
+    entityId: sentence.id,
+    action,
+    baseVersion: sentence._version || 0,
+    payload: action === 'delete' ? undefined : payload,
+    clientUpdatedAt: new Date(sentence.updatedAt).toISOString(),
+  }
+}
+
 export const useSentencesStore = defineStore('sentences', () => {
   const sentences = ref([])
   const loading = ref(false)
@@ -66,7 +84,6 @@ export const useSentencesStore = defineStore('sentences', () => {
   // Add sentence
   async function addSentence(content, source = 'text', analysis = null) {
     const now = Date.now()
-    // Deep clone analysis to ensure serializability for IndexedDB
     const cleanAnalysis = analysis
       ? JSON.parse(JSON.stringify({ ...analysis, analyzedAt: now }))
       : null
@@ -78,9 +95,16 @@ export const useSentencesStore = defineStore('sentences', () => {
       updatedAt: now,
       tags: [],
       analysis: cleanAnalysis,
+      _version: 0,
     }
     await dbSave(sentence)
     sentences.value.push(sentence)
+    // 入同步队列
+    try {
+      const { useSyncStore } = await import('./sync.js')
+      const syncStore = useSyncStore()
+      await syncStore.addToQueue(buildOp('create', sentence))
+    } catch { /* 未登录时静默跳过 */ }
     return sentence
   }
 
@@ -122,8 +146,17 @@ export const useSentencesStore = defineStore('sentences', () => {
 
   // Remove sentence
   async function removeSentence(id) {
+    const sentence = sentences.value.find((s) => s.id === id)
     await dbDelete(id)
     sentences.value = sentences.value.filter((s) => s.id !== id)
+    // 入同步队列
+    if (sentence) {
+      try {
+        const { useSyncStore } = await import('./sync.js')
+        const syncStore = useSyncStore()
+        await syncStore.addToQueue(buildOp('delete', sentence))
+      } catch { /* 未登录时静默跳过 */ }
+    }
   }
 
   // Clear all
@@ -266,6 +299,37 @@ export const useSentencesStore = defineStore('sentences', () => {
     await loadSentences()
   }
 
+  /**
+   * 将服务端拉取的 sentence 变更应用到本地。
+   * 由 sync store 在 pull 后调用。
+   */
+  async function applyRemoteChange(record) {
+    const clean = JSON.parse(JSON.stringify(record))
+    // 转为本地格式（ISO 时间 -> timestamp）
+    clean.createdAt = clean.createdAt ? new Date(clean.createdAt).getTime() : Date.now()
+    clean.updatedAt = clean.updatedAt ? new Date(clean.updatedAt).getTime() : Date.now()
+    clean.deletedAt = clean.deletedAt ? new Date(clean.deletedAt).getTime() : null
+    clean._version = clean.version || 0
+
+    const idx = sentences.value.findIndex((s) => s.id === clean.id)
+
+    if (clean.deletedAt) {
+      // 服务端已删除
+      if (idx !== -1) {
+        await dbDelete(clean.id)
+        sentences.value.splice(idx, 1)
+      }
+      return
+    }
+
+    await dbSave(clean)
+    if (idx !== -1) {
+      sentences.value[idx] = clean
+    } else {
+      sentences.value.push(clean)
+    }
+  }
+
   return {
     sentences,
     loading,
@@ -287,5 +351,6 @@ export const useSentencesStore = defineStore('sentences', () => {
     getSentenceById,
     exportData,
     importData,
+    applyRemoteChange,
   }
 })
