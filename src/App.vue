@@ -196,20 +196,12 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
-// 网络状态监听
-function handleOnline() { syncStore.onNetworkRestore() }
-function handleOffline() { syncStore.setOffline() }
-
 onMounted(async () => {
-  window.addEventListener('online', handleOnline)
-  window.addEventListener('offline', handleOffline)
   // 尝试恢复登录态
   await authStore.restoreSession()
 })
 
 onUnmounted(() => {
-  window.removeEventListener('online', handleOnline)
-  window.removeEventListener('offline', handleOffline)
-  syncStore.stopPeriodicPull()
+  // 无需清理：网络监听由 platform/device.js 的 onNetworkChange 统一管理
 })
 </script>

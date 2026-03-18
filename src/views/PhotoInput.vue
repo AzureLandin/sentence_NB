@@ -9,20 +9,7 @@
       <h1 class="text-xl font-bold text-gray-800">拍照输入</h1>
     </div>
 
-    <div
-      v-if="!settingsStore.isVisionConfigured()"
-      class="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-amber-800 mb-4"
-    >
-      <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <div>
-          <p class="font-medium">请先配置 API</p>
-          <p class="text-sm mt-1">前往 <router-link to="/settings" class="underline font-medium">设置页面</router-link> 配置 API Key 和视觉模型</p>
-        </div>
-      </div>
-    </div>
+
 
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
@@ -88,7 +75,7 @@
               </button>
               <button
                 @click="handleOCR"
-                :disabled="ocrLoading || !settingsStore.isVisionConfigured()"
+                :disabled="ocrLoading"
                 class="flex-1 py-3 px-4 rounded-xl font-medium bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50 transition-colors text-sm"
               >
                 {{ ocrLoading ? '识别中...' : '✨ 识别' }}
@@ -164,7 +151,7 @@
             <div class="pt-2">
               <button
                 @click="handleBatchAnalyze"
-                :disabled="selectedSentenceIds.length === 0 || !settingsStore.isAnalysisConfigured()"
+                :disabled="selectedSentenceIds.length === 0"
                 class="w-full py-3 px-4 rounded-xl font-medium bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50"
               >
                 🚀 分析 {{ selectedSentenceIds.length }} 个句子
@@ -232,10 +219,9 @@ import { ref, computed, nextTick, onUnmounted } from 'vue'
 import Cropper from 'cropperjs'
 import 'cropperjs/dist/cropper.css'
 import { extractSentences } from '../api/ocr.js'
-import { useSentencesStore, useSettingsStore } from '../stores/index.js'
+import { useSentencesStore } from '../stores/index.js'
 
 const sentencesStore = useSentencesStore()
-const settingsStore = useSettingsStore()
 
 const currentStep = ref('select')
 const imagePreview = ref('')
@@ -350,10 +336,6 @@ function confirmCrop() {
 
 async function handleOCR() {
   if (!imageBase64.value) return
-  if (!settingsStore.isVisionConfigured()) {
-    ocrError.value = '请先在设置中配置API Key和视觉模型ID'
-    return
-  }
 
   ocrLoading.value = true
   ocrError.value = ''
@@ -400,10 +382,6 @@ async function handleBatchAnalyze() {
     .map((item) => item.text)
 
   if (selectedTexts.length === 0) return
-  if (!settingsStore.isAnalysisConfigured()) {
-    ocrError.value = '请先在设置中配置API Key和文本模型ID'
-    return
-  }
 
   ocrError.value = ''
   submittedCount.value = selectedTexts.length

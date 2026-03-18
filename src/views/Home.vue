@@ -58,25 +58,16 @@
       </div>
     </div>
 
-    <!-- API Warning -->
-    <div
-      v-if="!settingsStore.isAnalysisConfigured()"
-      class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800"
-    >
-      尚未配置AI API。请前往
-      <router-link to="/settings" class="text-primary-600 underline font-medium">设置页面</router-link>
-      配置API Key以使用分析功能。
-    </div>
+
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted } from 'vue'
 import FeatureCard from '../components/FeatureCard.vue'
-import { useSentencesStore, useSettingsStore } from '../stores/index.js'
+import { useSentencesStore } from '../stores/index.js'
 
 const sentencesStore = useSentencesStore()
-const settingsStore = useSettingsStore()
 
 onMounted(() => {
   sentencesStore.loadSentences()

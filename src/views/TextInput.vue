@@ -10,20 +10,7 @@
       <h1 class="text-xl font-bold text-gray-800">文字输入</h1>
     </div>
 
-    <!-- API not configured warning -->
-    <div
-      v-if="!settingsStore.isAnalysisConfigured()"
-      class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-sm text-yellow-800 mb-4 flex items-start gap-2"
-    >
-      <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-      <span>
-        请先前往
-        <router-link to="/settings" class="text-primary-600 underline font-medium">设置页面</router-link>
-        配置 API Key
-      </span>
-    </div>
+
 
     <!-- Success notice (after analysis) -->
     <div
@@ -145,10 +132,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { analyzeSentence } from '../api/analyze.js'
-import { useSentencesStore, useSettingsStore } from '../stores/index.js'
+import { useSentencesStore } from '../stores/index.js'
 
 const sentencesStore = useSentencesStore()
-const settingsStore = useSettingsStore()
 
 const textareaRef = ref(null)
 const inputText = ref('')
@@ -198,10 +184,6 @@ function cleanText() {
 
 async function handleAnalyze() {
   if (!inputText.value.trim()) return
-  if (!settingsStore.isAnalysisConfigured()) {
-    error.value = '请先在设置中配置 API Key'
-    return
-  }
   if (validationError.value) {
     error.value = validationError.value
     return

@@ -1,0 +1,99 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "英语句子笔记",
+        "navigationBarBackgroundColor": "#ffffff",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/input/text",
+      "style": {
+        "navigationBarTitleText": "文字输入",
+        "navigationBarBackgroundColor": "#ffffff",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/input/photo",
+      "style": {
+        "navigationBarTitleText": "拍照输入",
+        "navigationBarBackgroundColor": "#ffffff",
+        "navigationBarTextStyle": "black"
+      }
+    },
+
+    {
+      "path": "pages/collection/index",
+      "style": {
+        "navigationBarTitleText": "我的收藏",
+        "navigationBarBackgroundColor": "#ffffff",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/collection/detail",
+      "style": {
+        "navigationBarTitleText": "句子详情",
+        "navigationBarBackgroundColor": "#ffffff",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/settings/index",
+      "style": {
+        "navigationBarTitleText": "设置",
+        "navigationBarBackgroundColor": "#ffffff",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/auth/login",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationBarBackgroundColor": "#ffffff",
+        "navigationBarTextStyle": "black"
+      }
+    }
+  ],
+  "tabBar": {
+    "color": "#9ca3af",
+    "selectedColor": "#3b82f6",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/input/text",
+        "text": "文字",
+        "iconPath": "static/tabbar/text.png",
+        "selectedIconPath": "static/tabbar/text-active.png"
+      },
+      {
+        "pagePath": "pages/input/photo",
+        "text": "拍照",
+        "iconPath": "static/tabbar/photo.png",
+        "selectedIconPath": "static/tabbar/photo-active.png"
+      },
+      {
+        "pagePath": "pages/collection/index",
+        "text": "收藏",
+        "iconPath": "static/tabbar/collection.png",
+        "selectedIconPath": "static/tabbar/collection-active.png"
+      },
+      {
+        "pagePath": "pages/settings/index",
+        "text": "设置",
+        "iconPath": "static/tabbar/settings.png",
+        "selectedIconPath": "static/tabbar/settings-active.png"
+      }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "英语句子笔记",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f9fafb"
+  }
+}

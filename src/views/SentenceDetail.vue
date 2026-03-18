@@ -236,14 +236,13 @@ import { ref, computed, watch, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AnalysisCard from '../components/AnalysisCard.vue'
 import TagInput from '../components/TagInput.vue'
-import { useSentencesStore, useSettingsStore } from '../stores/index.js'
+import { useSentencesStore } from '../stores/index.js'
 import { analyzeSentence } from '../api/analyze.js'
 import { formatSentenceMarkdown, downloadMarkdown } from '../utils/export.js'
 
 const route = useRoute()
 const router = useRouter()
 const sentencesStore = useSentencesStore()
-const settingsStore = useSettingsStore()
 
 const showDeleteConfirm = ref(false)
 const reAnalyzing = ref(false)
@@ -301,10 +300,7 @@ async function saveTags() {
 }
 
 async function reAnalyze() {
-  if (!sentence.value || !settingsStore.isAnalysisConfigured()) {
-    analysisError.value = '请先在设置中配置 API Key'
-    return
-  }
+  if (!sentence.value) return
 
   reAnalyzing.value = true
   analysisError.value = ''
