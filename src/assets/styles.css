@@ -8,11 +8,6 @@
     font-size: 15px;
     line-height: 1.6;
   }
-
-  /* Ensure tap targets meet minimum 44px requirement */
-  button, a, [role="button"] {
-    min-height: 44px;
-  }
 }
 
 @layer components {
