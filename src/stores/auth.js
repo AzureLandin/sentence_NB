@@ -2,13 +2,23 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { login, register, logout, tryRestoreSession } from '../repositories/authRepository.js'
 import { useSyncStore } from './sync.js'
+import { useAiConfigStore } from './aiConfig.js'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const loading = ref(false)
   const error = ref('')
-
   const isLoggedIn = ref(false)
+
+  async function _postLogin() {
+    const aiConfigStore = useAiConfigStore()
+    const syncStore = useSyncStore()
+    // 并行拉取 AI 配置和数据同步
+    await Promise.allSettled([
+      aiConfigStore.fetch(),
+      syncStore.pull(),
+    ])
+  }
 
   async function restoreSession() {
     loading.value = true
@@ -18,9 +28,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (restored) {
         user.value = restored
         isLoggedIn.value = true
-        // 登录后触发首登同步
-        const syncStore = useSyncStore()
-        await syncStore.initSync()
+        await _postLogin()
       }
     } catch {
       user.value = null
@@ -37,8 +45,7 @@ export const useAuthStore = defineStore('auth', () => {
       const u = await login(email, password)
       user.value = u
       isLoggedIn.value = true
-      const syncStore = useSyncStore()
-      await syncStore.initSync()
+      await _postLogin()
       return true
     } catch (err) {
       error.value = err.message || '登录失败，请重试'
@@ -55,8 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
       const u = await register(email, password, displayName)
       user.value = u
       isLoggedIn.value = true
-      const syncStore = useSyncStore()
-      await syncStore.initSync()
+      await _postLogin()
       return true
     } catch (err) {
       error.value = err.message || '注册失败，请重试'

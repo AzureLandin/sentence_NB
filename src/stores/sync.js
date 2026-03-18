@@ -1,196 +1,118 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { pull, push } from '../repositories/syncRepository.js'
-import {
-  enqueue,
-  getPendingOps,
-  dequeue,
-  markRetry,
-  addConflict,
-  addDeadLetter,
-  clearQueue,
-} from '../utils/sync/syncQueue.js'
+import { pull as repoPull, push as repoPush } from '../repositories/syncRepository.js'
+import { storage } from '../platform/storage.js'
+import { isOnline, onNetworkChange } from '../platform/device.js'
 
 const CURSOR_KEY = 'sn_sync_cursor'
-const RETRY_DELAYS = [2000, 5000, 15000, 30000, 60000]
+const SNAPSHOT_KEY = 'sn_snapshot'
 
 export const useSyncStore = defineStore('sync', () => {
   // idle | syncing | error | offline
   const status = ref('idle')
   const lastSyncAt = ref(null)
-  const conflictCount = ref(0)
-  const deadLetterCount = ref(0)
-
-  let _flushTimer = null
-  let _pullTimer = null
 
   // ── 游标 ────────────────────────────────────────────────
 
   function getCursor() {
-    return localStorage.getItem(CURSOR_KEY) || null
+    return storage.get(CURSOR_KEY) || null
   }
 
   function saveCursor(cursor) {
-    if (cursor) localStorage.setItem(CURSOR_KEY, cursor)
+    if (cursor) storage.set(CURSOR_KEY, cursor)
   }
 
   function clearCursor() {
-    localStorage.removeItem(CURSOR_KEY)
+    storage.remove(CURSOR_KEY)
   }
 
-  // ── 入队 ────────────────────────────────────────────────
+  // ── 拉取 ─────────────────────────────────────────────
 
-  async function addToQueue(op) {
-    await enqueue(op)
-    scheduleFlush(500)
-  }
-
-  // ── 调度 ────────────────────────────────────────────────
-
-  function scheduleFlush(delay = 1000) {
-    clearTimeout(_flushTimer)
-    _flushTimer = setTimeout(() => flushQueue(), delay)
-  }
-
-  function startPeriodicPull(intervalMs = 30000) {
-    stopPeriodicPull()
-    _pullTimer = setInterval(() => incrementalPull(), intervalMs)
-  }
-
-  function stopPeriodicPull() {
-    if (_pullTimer) clearInterval(_pullTimer)
-    _pullTimer = null
-  }
-
-  // ── 初始化同步（登录后调用）────────────────────────────
-
-  async function initSync() {
-    status.value = 'syncing'
-    try {
-      await _fullPullAndMerge()
-      await _migrateLocalData()
-      await flushQueue()
-      startPeriodicPull()
-      status.value = 'idle'
-    } catch (err) {
-      status.value = 'error'
-      console.error('[sync] initSync failed:', err)
-    }
-  }
-
-  // ── 全量拉取并建立本地基线 ────────────────────────────
-
-  async function _fullPullAndMerge() {
-    clearCursor()
-    let cursor = null
-    let hasMore = true
-    const serverIds = new Set()
-
-    while (hasMore) {
-      let result
-      try {
-        result = await pull(cursor)
-      } catch (err) {
-        if (err.errorCode === 'CURSOR_EXPIRED' || err.errorCode === 'CURSOR_INVALID') {
-          clearCursor()
-          cursor = null
-          result = await pull(null)
-        } else {
-          throw err
-        }
-      }
-
-      // 记录服务端已有的 sentence ID，供首登迁移使用
-      for (const change of result.changes) {
-        if (change.entityType === 'sentence') {
-          serverIds.add(change.entityId)
-        }
-      }
-
-      await _applyChanges(result.changes)
-      cursor = result.nextCursor
-      hasMore = result.hasMore
-    }
-
-    saveCursor(cursor)
-    lastSyncAt.value = Date.now()
-    return serverIds
-  }
-
-  // ── 首登迁移：将本地已有数据推送到服务端 ────────────────
-
-  async function _migrateLocalData() {
-    const { getAllSentences } = await import('../utils/storage.js')
-    const localSentences = await getAllSentences()
-    if (!localSentences || localSentences.length === 0) return
-
-    // 只处理未删除、且没有 _version（说明是首次登录前创建的老数据）
-    const toMigrate = localSentences.filter(
-      (s) => !s.deletedAt && (s._version === undefined || s._version === 0)
-    )
-    if (toMigrate.length === 0) return
-
-    for (const s of toMigrate) {
-      const op = {
-        opId: 'op_migrate_' + s.id.replace(/-/g, ''),
-        entityType: 'sentence',
-        entityId: s.id,
-        action: 'create',
-        baseVersion: 0,
-        payload: {
-          content: s.content,
-          tags: s.tags || [],
-          analysis: s.analysis || null,
-          source: s.source || 'text',
-        },
-        clientUpdatedAt: new Date(s.updatedAt || s.createdAt || Date.now()).toISOString(),
-      }
-      await enqueue(op)
-    }
-  }
-
-  // ── 增量拉取 ──────────────────────────────────────────
-
-  async function incrementalPull() {
+  /**
+   * 从服务端拉取数据，写入 store + 本地快照缓存。
+   * 登录成功后调用一次，作为全量初始化。
+   */
+  async function pull() {
     if (status.value === 'syncing') return
     status.value = 'syncing'
     try {
-      const cursor = getCursor()
-      const result = await pull(cursor)
-      await _applyChanges(result.changes)
-      saveCursor(result.nextCursor)
+      clearCursor()
+      let cursor = null
+      let hasMore = true
+
+      while (hasMore) {
+        const result = await repoPull(cursor)
+        await _applyChanges(result.changes)
+        cursor = result.nextCursor
+        hasMore = result.hasMore
+      }
+
+      saveCursor(cursor)
+
+      // 保存本地快照（供快速启动渲染）
+      const { useSentencesStore } = await import('./sentences.js')
+      const sentencesStore = useSentencesStore()
+      storage.set(SNAPSHOT_KEY, JSON.stringify(sentencesStore.sentences))
+
       lastSyncAt.value = Date.now()
       status.value = 'idle'
     } catch (err) {
-      if (err.errorCode === 'CURSOR_EXPIRED') {
-        await _rebuildFromCursorExpiry()
-      } else {
-        status.value = 'error'
-      }
+      status.value = isOnline() ? 'error' : 'offline'
+      console.error('[sync] pull failed:', err)
     }
   }
 
-  // ── cursor 过期重建 ────────────────────────────────────
+  // ── 推送 ─────────────────────────────────────────────
 
-  async function _rebuildFromCursorExpiry() {
-    // 保留队列和冲突桶，清 cursor，全量重拉，重放队列
-    clearCursor()
-    const pendingOps = await getPendingOps()
-    await clearQueue()
-    await _fullPullAndMerge()
-    for (const op of pendingOps) {
-      await enqueue(op)
+  /**
+   * 将本地当前数据全量推送到服务端。
+   * 数据变更（add/update/delete）后直接调用，失败则 toast 提示。
+   */
+  async function push() {
+    if (!isOnline()) {
+      status.value = 'offline'
+      return
     }
-    await flushQueue()
-    status.value = 'idle'
+
+    const { useSentencesStore } = await import('./sentences.js')
+    const sentencesStore = useSentencesStore()
+
+    // 构建 upsert 操作列表
+    const operations = sentencesStore.sentences.map((s) => ({
+      opId: 'op_' + s.id.replace(/-/g, '') + '_' + Date.now(),
+      entityType: 'sentence',
+      entityId: s.id,
+      action: 'upsert',
+      baseVersion: s._version || 0,
+      payload: {
+        content: s.content,
+        tags: s.tags || [],
+        analysis: s.analysis || null,
+        source: s.source || 'text',
+      },
+      clientUpdatedAt: new Date(s.updatedAt || Date.now()).toISOString(),
+    }))
+
+    if (operations.length === 0) return
+
+    try {
+      status.value = 'syncing'
+      const result = await repoPush(operations)
+      if (result.nextCursor) saveCursor(result.nextCursor)
+      lastSyncAt.value = Date.now()
+      status.value = 'idle'
+    } catch (err) {
+      status.value = isOnline() ? 'error' : 'offline'
+      // toast 提示用户
+      console.warn('[sync] push failed:', err.message)
+    }
   }
 
-  // ── 应用服务端变更到本地 store ──────────────────────────
+  // ── 应用服务端变更 ────────────────────────────────────
 
   async function _applyChanges(changes) {
     if (!changes || changes.length === 0) return
 
-    // 懒引入避免循环依赖
     const { useSentencesStore } = await import('./sentences.js')
     const { useSettingsStore } = await import('./settings.js')
     const sentencesStore = useSentencesStore()
@@ -198,7 +120,6 @@ export const useSyncStore = defineStore('sync', () => {
 
     for (const change of changes) {
       const { entityType, record } = change
-
       if (entityType === 'sentence') {
         await sentencesStore.applyRemoteChange(record)
       } else if (entityType === 'setting') {
@@ -207,103 +128,21 @@ export const useSyncStore = defineStore('sync', () => {
     }
   }
 
-  // ── 推送本地队列 ──────────────────────────────────────
+  // ── 网络恢复时触发推送 ────────────────────────────────
 
-  async function flushQueue() {
-    const ops = await getPendingOps()
-    if (ops.length === 0) return
-
-    if (status.value !== 'syncing') status.value = 'syncing'
-
-    let results
-    try {
-      const result = await push(ops)
-      results = result.results
-      saveCursor(result.nextCursor)
-    } catch (err) {
-      // 请求级错误
-      if (!navigator.onLine || err.message?.includes('fetch')) {
-        status.value = 'offline'
-        return
-      }
-      status.value = 'error'
-      // 全批退避重试
-      for (const op of ops) {
-        await markRetry(op.opId)
-      }
-      const retryCount = ops[0]?._retryCount || 0
-      const delay = RETRY_DELAYS[Math.min(retryCount, RETRY_DELAYS.length - 1)]
-      scheduleFlush(delay)
-      return
-    }
-
-    // 处理每条操作结果
-    for (const result of results) {
-      const { opId, status: opStatus, errorCode } = result
-
-      if (opStatus === 'applied') {
-        await dequeue(opId)
-      } else if (opStatus === 'conflict') {
-        await dequeue(opId)
-        conflictCount.value += 1
-        const op = ops.find(o => o.opId === opId)
-        if (op) {
-          await addConflict({
-            entityType: op.entityType,
-            entityId: op.entityId,
-            localSnapshot: op.payload || {},
-            serverSnapshot: { version: result.serverVersion },
-          })
-        }
-        // 拉取最新服务端状态
-        await incrementalPull()
-      } else if (opStatus === 'retryable_error') {
-        await markRetry(opId)
-        const op = ops.find(o => o.opId === opId)
-        const retryCount = op?._retryCount || 0
-        const delay = RETRY_DELAYS[Math.min(retryCount, RETRY_DELAYS.length - 1)]
-        scheduleFlush(delay)
-      } else if (opStatus === 'invalid') {
-        await dequeue(opId)
-        deadLetterCount.value += 1
-        const op = ops.find(o => o.opId === opId)
-        if (op) {
-          await addDeadLetter(op, errorCode, result.details || {})
-        }
-      }
-    }
-
-    status.value = 'idle'
-    lastSyncAt.value = Date.now()
-  }
-
-  // ── 网络恢复时触发 ────────────────────────────────────
-
-  function onNetworkRestore() {
-    if (status.value === 'offline') {
+  onNetworkChange((online) => {
+    if (online && status.value === 'offline') {
       status.value = 'idle'
-      flushQueue()
-      incrementalPull()
+      push()
+    } else if (!online) {
+      status.value = 'offline'
     }
-  }
-
-  function setOffline() {
-    status.value = 'offline'
-  }
+  })
 
   return {
     status,
     lastSyncAt,
-    conflictCount,
-    deadLetterCount,
-    addToQueue,
-    initSync,
-    incrementalPull,
-    flushQueue,
-    scheduleFlush,
-    startPeriodicPull,
-    stopPeriodicPull,
-    onNetworkRestore,
-    setOffline,
+    pull,
+    push,
   }
 })

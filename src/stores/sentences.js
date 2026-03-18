@@ -9,24 +9,6 @@ import {
   clearAllSentences as dbClear,
 } from '../utils/storage.js'
 
-function buildOp(action, sentence) {
-  const payload = {
-    content: sentence.content,
-    tags: sentence.tags,
-    analysis: sentence.analysis || null,
-    source: sentence.source,
-  }
-  return {
-    opId: 'op_' + crypto.randomUUID().replace(/-/g, ''),
-    entityType: 'sentence',
-    entityId: sentence.id,
-    action,
-    baseVersion: sentence._version || 0,
-    payload: action === 'delete' ? undefined : payload,
-    clientUpdatedAt: new Date(sentence.updatedAt).toISOString(),
-  }
-}
-
 export const useSentencesStore = defineStore('sentences', () => {
   const sentences = ref([])
   const loading = ref(false)
@@ -38,7 +20,6 @@ export const useSentencesStore = defineStore('sentences', () => {
   const filteredSentences = computed(() => {
     let result = [...sentences.value]
 
-    // Search filter
     if (searchQuery.value.trim()) {
       const query = searchQuery.value.toLowerCase()
       result = result.filter((s) =>
@@ -47,12 +28,10 @@ export const useSentencesStore = defineStore('sentences', () => {
       )
     }
 
-    // Tag filter
     if (filterTag.value) {
       result = result.filter((s) => s.tags.includes(filterTag.value))
     }
 
-    // Sort
     result.sort((a, b) => {
       return sortOrder.value === 'desc'
         ? b.createdAt - a.createdAt
@@ -62,14 +41,12 @@ export const useSentencesStore = defineStore('sentences', () => {
     return result
   })
 
-  // All tags across sentences
   const allTags = computed(() => {
     const tagSet = new Set()
     sentences.value.forEach((s) => s.tags.forEach((t) => tagSet.add(t)))
     return [...tagSet].sort()
   })
 
-  // Load from DB
   async function loadSentences() {
     loading.value = true
     try {
@@ -81,7 +58,14 @@ export const useSentencesStore = defineStore('sentences', () => {
     }
   }
 
-  // Add sentence
+  async function _triggerPush() {
+    try {
+      const { useSyncStore } = await import('./sync.js')
+      const syncStore = useSyncStore()
+      await syncStore.push()
+    } catch { /* 未登录时静默跳过 */ }
+  }
+
   async function addSentence(content, source = 'text', analysis = null) {
     const now = Date.now()
     const cleanAnalysis = analysis
@@ -99,16 +83,10 @@ export const useSentencesStore = defineStore('sentences', () => {
     }
     await dbSave(sentence)
     sentences.value.push(sentence)
-    // 入同步队列
-    try {
-      const { useSyncStore } = await import('./sync.js')
-      const syncStore = useSyncStore()
-      await syncStore.addToQueue(buildOp('create', sentence))
-    } catch { /* 未登录时静默跳过 */ }
+    await _triggerPush()
     return sentence
   }
 
-  // Update sentence
   async function updateSentence(id, updates) {
     const idx = sentences.value.findIndex((s) => s.id === id)
     if (idx === -1) return null
@@ -123,25 +101,17 @@ export const useSentencesStore = defineStore('sentences', () => {
     }
     await dbSave(updated)
     sentences.value[idx] = updated
-    // 入同步队列
-    try {
-      const { useSyncStore } = await import('./sync.js')
-      const syncStore = useSyncStore()
-      await syncStore.addToQueue(buildOp('upsert', updated))
-    } catch { /* 未登录时静默跳过 */ }
+    await _triggerPush()
     return updated
   }
 
-  // Update analysis for a sentence
   async function updateAnalysis(id, analysis) {
-    // Deep clone to ensure serializability for IndexedDB
     const cleanAnalysis = JSON.parse(JSON.stringify(analysis))
     return updateSentence(id, {
       analysis: { ...cleanAnalysis, analyzedAt: Date.now() },
     })
   }
 
-  // Update tags
   async function updateTags(id, tags) {
     const cleanTags = Array.isArray(tags)
       ? tags.map((t) => String(t || '')).filter(Boolean)
@@ -149,22 +119,12 @@ export const useSentencesStore = defineStore('sentences', () => {
     return updateSentence(id, { tags: cleanTags })
   }
 
-  // Remove sentence
   async function removeSentence(id) {
-    const sentence = sentences.value.find((s) => s.id === id)
     await dbDelete(id)
     sentences.value = sentences.value.filter((s) => s.id !== id)
-    // 入同步队列
-    if (sentence) {
-      try {
-        const { useSyncStore } = await import('./sync.js')
-        const syncStore = useSyncStore()
-        await syncStore.addToQueue(buildOp('delete', sentence))
-      } catch { /* 未登录时静默跳过 */ }
-    }
+    await _triggerPush()
   }
 
-  // Clear all
   async function clearAll() {
     await dbClear()
     sentences.value = []
@@ -219,20 +179,17 @@ export const useSentencesStore = defineStore('sentences', () => {
         .filter((item) => item.length > 2)
     )]
 
-    // 先全部入库（无分析结果）
     const sentenceIds = []
     for (const content of normalized) {
       const sentence = await addSentence(content, 'photo', null)
       sentenceIds.push(sentence.id)
     }
 
-    // 后台异步分析，不阻塞
     ;(async () => {
       for (const id of sentenceIds) {
         try {
           const sentence = getSentenceById(id)
           if (!sentence || sentence.analysis) continue
-          
           const analysis = await analyzeSentence(sentence.content)
           await updateAnalysis(id, analysis)
         } catch (err) {
@@ -282,17 +239,14 @@ export const useSentencesStore = defineStore('sentences', () => {
     return result
   }
 
-  // Get by id
   function getSentenceById(id) {
     return sentences.value.find((s) => s.id === id) || null
   }
 
-  // Export data
   function exportData() {
     return JSON.stringify(sentences.value, null, 2)
   }
 
-  // Import data
   async function importData(jsonString) {
     const data = JSON.parse(jsonString)
     if (!Array.isArray(data)) throw new Error('Invalid data format')
@@ -305,12 +259,10 @@ export const useSentencesStore = defineStore('sentences', () => {
   }
 
   /**
-   * 将服务端拉取的 sentence 变更应用到本地。
-   * 由 sync store 在 pull 后调用。
+   * 将服务端拉取的 sentence 变更应用到本地（由 sync store 调用）。
    */
   async function applyRemoteChange(record) {
     const clean = JSON.parse(JSON.stringify(record))
-    // 转为本地格式（ISO 时间 -> timestamp）
     clean.createdAt = clean.createdAt ? new Date(clean.createdAt).getTime() : Date.now()
     clean.updatedAt = clean.updatedAt ? new Date(clean.updatedAt).getTime() : Date.now()
     clean.deletedAt = clean.deletedAt ? new Date(clean.deletedAt).getTime() : null
@@ -319,7 +271,6 @@ export const useSentencesStore = defineStore('sentences', () => {
     const idx = sentences.value.findIndex((s) => s.id === clean.id)
 
     if (clean.deletedAt) {
-      // 服务端已删除
       if (idx !== -1) {
         await dbDelete(clean.id)
         sentences.value.splice(idx, 1)

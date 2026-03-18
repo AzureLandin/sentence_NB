@@ -10,469 +10,221 @@
       <h1 class="text-xl font-bold text-gray-800">设置</h1>
     </div>
 
-    <!-- API Configuration -->
+    <!-- AI 配置 -->
     <div class="card mb-4">
-      <h2 class="font-semibold text-gray-800 mb-4">API 配置</h2>
+      <h2 class="font-semibold text-gray-800 mb-4">AI 配置</h2>
 
-      <!-- Mode Switch -->
-      <div class="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
+      <div v-if="!authStore.isLoggedIn" class="text-sm text-gray-500 py-2">
+        请先登录后配置自有 API Key。系统已配置平台默认 Key，可直接使用。
+      </div>
+
+      <template v-else>
+        <div v-if="aiConfigStore.loading" class="text-sm text-gray-400 py-2">加载中...</div>
+        <div v-else>
+          <!-- Tab -->
+          <div class="flex border-b border-gray-200 mb-4">
+            <button
+              @click="aiTab = 'text'"
+              class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+              :class="aiTab === 'text' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+            >文本模型</button>
+            <button
+              @click="aiTab = 'vision'"
+              class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+              :class="aiTab === 'vision' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+            >视觉模型</button>
+          </div>
+
+          <!-- 文本模型 -->
+          <div v-show="aiTab === 'text'">
+            <p class="text-xs text-gray-400 mb-3">用于分析长难句。留空则使用平台默认配置。</p>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-600 mb-1">AI 提供商</label>
+              <input
+                v-model="textProviderInput"
+                placeholder="如 openai / siliconflow / custom"
+                class="input-field"
+              />
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-600 mb-1">API Key</label>
+              <p v-if="aiConfigStore.textApiKey" class="text-xs text-gray-500 mb-1">
+                当前：{{ aiConfigStore.textApiKey }}（脱敏）
+              </p>
+              <p v-else class="text-xs text-gray-400 mb-1">未设置，使用平台默认</p>
+              <div class="relative">
+                <input
+                  :type="showTextKey ? 'text' : 'password'"
+                  v-model="textKeyInput"
+                  placeholder="输入新 API Key（留空不修改）"
+                  class="input-field pr-10"
+                />
+                <button
+                  @click="showTextKey = !showTextKey"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      :d="showTextKey
+                        ? 'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21'
+                        : 'M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-600 mb-1">模型 ID</label>
+              <p v-if="aiConfigStore.textModel" class="text-xs text-gray-500 mb-1">当前：{{ aiConfigStore.textModel }}</p>
+              <input
+                v-model="textModelInput"
+                placeholder="如 gpt-4o（留空不修改）"
+                class="input-field"
+              />
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-600 mb-1">API 端点</label>
+              <input
+                v-model="textEndpointInput"
+                placeholder="如 https://api.openai.com/v1/chat/completions（留空不修改）"
+                class="input-field"
+              />
+            </div>
+
+            <div class="flex gap-2 flex-wrap">
+              <button
+                @click="handleSaveText"
+                :disabled="aiConfigStore.loading"
+                class="btn-primary text-sm"
+              >{{ aiConfigStore.loading ? '保存中...' : '保存文本配置' }}</button>
+              <button
+                @click="handleTestText"
+                :disabled="testingText"
+                class="btn-outline text-sm"
+              >{{ testingText ? '测试中...' : '测试连接' }}</button>
+            </div>
+          </div>
+
+          <!-- 视觉模型 -->
+          <div v-show="aiTab === 'vision'">
+            <p class="text-xs text-gray-400 mb-3">用于图片 OCR 识别。留空则使用平台默认配置。</p>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-600 mb-1">AI 提供商</label>
+              <input
+                v-model="visionProviderInput"
+                placeholder="如 openai / siliconflow / custom"
+                class="input-field"
+              />
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-600 mb-1">API Key</label>
+              <p v-if="aiConfigStore.visionApiKey" class="text-xs text-gray-500 mb-1">
+                当前：{{ aiConfigStore.visionApiKey }}（脱敏）
+              </p>
+              <p v-else class="text-xs text-gray-400 mb-1">未设置，使用平台默认</p>
+              <div class="relative">
+                <input
+                  :type="showVisionKey ? 'text' : 'password'"
+                  v-model="visionKeyInput"
+                  placeholder="输入新 API Key（留空不修改）"
+                  class="input-field pr-10"
+                />
+                <button
+                  @click="showVisionKey = !showVisionKey"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      :d="showVisionKey
+                        ? 'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21'
+                        : 'M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-600 mb-1">模型 ID</label>
+              <p v-if="aiConfigStore.visionModel" class="text-xs text-gray-500 mb-1">当前：{{ aiConfigStore.visionModel }}</p>
+              <input
+                v-model="visionModelInput"
+                placeholder="如 gpt-4o（留空不修改）"
+                class="input-field"
+              />
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-600 mb-1">API 端点</label>
+              <input
+                v-model="visionEndpointInput"
+                placeholder="如 https://api.openai.com/v1/chat/completions（留空不修改）"
+                class="input-field"
+              />
+            </div>
+
+            <div class="flex gap-2 flex-wrap">
+              <button
+                @click="handleSaveVision"
+                :disabled="aiConfigStore.loading"
+                class="btn-primary text-sm"
+              >{{ aiConfigStore.loading ? '保存中...' : '保存视觉配置' }}</button>
+              <button
+                @click="handleTestVision"
+                :disabled="testingVision"
+                class="btn-outline text-sm"
+              >{{ testingVision ? '测试中...' : '测试连接' }}</button>
+            </div>
+          </div>
+
+          <!-- 测试结果 -->
+          <div v-if="testResult !== null" class="mt-3 text-sm rounded-lg p-3"
+            :class="testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'">
+            {{ testResult.success ? 'API 连接成功！' : ('连接失败：' + (testResult.message || '请检查配置')) }}
+          </div>
+          <div v-if="saveSuccess" class="mt-3 text-sm rounded-lg p-3 bg-green-50 text-green-700">
+            配置已保存
+          </div>
+          <div v-if="aiConfigStore.error" class="mt-3 text-sm rounded-lg p-3 bg-red-50 text-red-700">
+            {{ aiConfigStore.error }}
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- 显示模式 -->
+    <div class="card mb-4">
+      <h2 class="font-semibold text-gray-800 mb-4">显示模式</h2>
+      <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
         <button
           @click="settingsStore.useMode = 'simple'"
           class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors text-center"
           :class="settingsStore.useMode === 'simple'
             ? 'bg-white shadow text-blue-600'
             : 'text-gray-500 hover:text-gray-700'"
-        >
-          简单模式
-        </button>
+        >简单模式</button>
         <button
           @click="settingsStore.useMode = 'advanced'"
           class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors text-center"
           :class="settingsStore.useMode === 'advanced'
             ? 'bg-white shadow text-blue-600'
             : 'text-gray-500 hover:text-gray-700'"
-        >
-          专业模式
-        </button>
+        >专业模式</button>
       </div>
-      <p class="text-xs text-gray-400 mb-4">
+      <p class="text-xs text-gray-400 mt-2">
         {{ settingsStore.useMode === 'simple'
-          ? '只需配置一个多模态视觉模型，同时用于图片识别和句子分析'
-          : '分别配置视觉模型（OCR）和文本模型（分析），速度更快、成本更低' }}
+          ? '简洁界面，适合日常使用'
+          : '展示更多分析细节，适合深度学习' }}
       </p>
-
-      <!-- ===== Simple Mode: single config ===== -->
-      <template v-if="settingsStore.useMode === 'simple'">
-        <p class="text-xs text-gray-400 mb-3">选择一个支持视觉能力的多模态模型</p>
-
-        <!-- Provider -->
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-600 mb-1">AI提供商</label>
-          <select
-            :value="settingsStore.visionApi.provider"
-            @change="settingsStore.setVisionProvider($event.target.value)"
-            class="input-field"
-          >
-            <option value="openai">OpenAI (GPT-4o)</option>
-            <option value="qwen">通义千问</option>
-            <option value="zhipu">智谱 AI (GLM)</option>
-            <option value="siliconflow">硅基流动 (SiliconFlow)</option>
-            <option value="claude">Claude</option>
-            <option value="custom">自定义</option>
-          </select>
-        </div>
-
-        <!-- API Format (custom only) -->
-        <div v-if="settingsStore.visionApi.provider === 'custom'" class="mb-4">
-          <label class="block text-sm font-medium text-gray-600 mb-1">API 格式</label>
-          <select
-            :value="settingsStore.visionApi.apiFormat"
-            @change="settingsStore.visionApi.apiFormat = $event.target.value"
-            class="input-field"
-          >
-            <option value="openai">OpenAI 兼容格式</option>
-            <option value="claude">Claude 格式</option>
-          </select>
-          <p class="text-xs text-gray-400 mt-1">大多数第三方服务使用 OpenAI 兼容格式</p>
-        </div>
-
-        <!-- API Key -->
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-600 mb-1">API Key</label>
-          <div class="relative">
-            <input
-              :type="showVisionApiKey ? 'text' : 'password'"
-              :value="settingsStore.visionApi.apiKey"
-              @input="settingsStore.visionApi.apiKey = $event.target.value"
-              placeholder="输入你的API Key"
-              class="input-field pr-10"
-            />
-            <button
-              @click="showVisionApiKey = !showVisionApiKey"
-              class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <svg v-if="showVisionApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-              </svg>
-              <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <!-- Model -->
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-600 mb-1">模型ID</label>
-          <div class="flex gap-2">
-            <input
-              :value="settingsStore.visionApi.model"
-              @input="settingsStore.visionApi.model = $event.target.value"
-              placeholder="例如: gpt-4o, Qwen2.5-VL-72B-Instruct"
-              class="input-field flex-1"
-            />
-            <button
-              @click="handleValidateVisionModel"
-              :disabled="validatingVision || !settingsStore.visionApi.apiKey || !settingsStore.visionApi.model"
-              class="btn-outline text-xs whitespace-nowrap"
-            >
-              {{ validatingVision ? '验证中...' : '验证' }}
-            </button>
-          </div>
-          <p class="text-xs text-gray-400 mt-1">需选择支持视觉能力的多模态模型，纯文本模型无法识别图片</p>
-        </div>
-
-        <!-- Advanced: Endpoint -->
-        <div class="mb-4">
-          <button
-            @click="showVisionAdvanced = !showVisionAdvanced"
-            class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
-          >
-            <svg
-              class="w-4 h-4 transition-transform"
-              :class="{ 'rotate-90': showVisionAdvanced }"
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-            高级选项
-          </button>
-          <div v-if="showVisionAdvanced" class="mt-2">
-            <label class="block text-sm font-medium text-gray-600 mb-1">API 端点</label>
-            <input
-              :value="settingsStore.visionApi.endpoint"
-              @input="settingsStore.visionApi.endpoint = $event.target.value"
-              placeholder="https://api.openai.com/v1/chat/completions"
-              class="input-field"
-            />
-          </div>
-        </div>
-
-        <!-- Test -->
-        <div class="flex flex-wrap gap-2">
-          <button
-            @click="handleTestVisionConnection"
-            :disabled="testingVision || !settingsStore.visionApi.apiKey || !settingsStore.visionApi.model"
-            class="btn-primary text-sm"
-          >
-            {{ testingVision ? '测试中...' : '测试连接' }}
-          </button>
-        </div>
-
-        <div
-          v-if="visionTestResult !== null"
-          class="mt-3 text-sm rounded-lg p-3"
-          :class="visionTestResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-        >
-          {{ visionTestResult.message }}
-        </div>
-        <div
-          v-if="visionValidateResult !== null"
-          class="mt-3 text-sm rounded-lg p-3"
-          :class="visionValidateResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-        >
-          {{ visionValidateResult.message }}
-        </div>
-      </template>
-
-      <!-- ===== Advanced Mode: dual config with tabs ===== -->
-      <template v-else>
-        <!-- Tab Switch -->
-        <div class="flex border-b border-gray-200 mb-4">
-          <button
-            @click="activeTab = 'text'"
-            class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-            :class="activeTab === 'text'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'"
-          >
-            文本模型
-          </button>
-          <button
-            @click="activeTab = 'vision'"
-            class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-            :class="activeTab === 'vision'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'"
-          >
-            视觉模型
-          </button>
-        </div>
-
-        <!-- Text API Config -->
-        <div v-show="activeTab === 'text'">
-          <p class="text-xs text-gray-400 mb-3">用于分析长难句的文本模型</p>
-
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-600 mb-1">AI提供商</label>
-            <select
-              :value="settingsStore.textApi.provider"
-              @change="settingsStore.setTextProvider($event.target.value)"
-              class="input-field"
-            >
-              <option value="openai">OpenAI (GPT-4o)</option>
-              <option value="qwen">通义千问</option>
-              <option value="zhipu">智谱 AI (GLM)</option>
-              <option value="siliconflow">硅基流动 (SiliconFlow)</option>
-              <option value="claude">Claude</option>
-              <option value="custom">自定义</option>
-            </select>
-          </div>
-
-          <div v-if="settingsStore.textApi.provider === 'custom'" class="mb-4">
-            <label class="block text-sm font-medium text-gray-600 mb-1">API 格式</label>
-            <select
-              :value="settingsStore.textApi.apiFormat"
-              @change="settingsStore.textApi.apiFormat = $event.target.value"
-              class="input-field"
-            >
-              <option value="openai">OpenAI 兼容格式</option>
-              <option value="claude">Claude 格式</option>
-            </select>
-            <p class="text-xs text-gray-400 mt-1">大多数第三方服务使用 OpenAI 兼容格式</p>
-          </div>
-
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-600 mb-1">API Key</label>
-            <div class="relative">
-              <input
-                :type="showTextApiKey ? 'text' : 'password'"
-                :value="settingsStore.textApi.apiKey"
-                @input="settingsStore.textApi.apiKey = $event.target.value"
-                placeholder="输入你的API Key"
-                class="input-field pr-10"
-              />
-              <button
-                @click="showTextApiKey = !showTextApiKey"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <svg v-if="showTextApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-                </svg>
-                <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-600 mb-1">模型ID</label>
-            <div class="flex gap-2">
-              <input
-                :value="settingsStore.textApi.model"
-                @input="settingsStore.textApi.model = $event.target.value"
-                placeholder="例如: gpt-4o, glm-4-plus"
-                class="input-field flex-1"
-              />
-              <button
-                @click="handleValidateTextModel"
-                :disabled="validatingText || !settingsStore.textApi.apiKey || !settingsStore.textApi.model"
-                class="btn-outline text-xs whitespace-nowrap"
-              >
-                {{ validatingText ? '验证中...' : '验证' }}
-              </button>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <button
-              @click="showTextAdvanced = !showTextAdvanced"
-              class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
-            >
-              <svg
-                class="w-4 h-4 transition-transform"
-                :class="{ 'rotate-90': showTextAdvanced }"
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
-              高级选项
-            </button>
-            <div v-if="showTextAdvanced" class="mt-2">
-              <label class="block text-sm font-medium text-gray-600 mb-1">API 端点</label>
-              <input
-                :value="settingsStore.textApi.endpoint"
-                @input="settingsStore.textApi.endpoint = $event.target.value"
-                placeholder="https://api.openai.com/v1/chat/completions"
-                class="input-field"
-              />
-            </div>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <button
-              @click="handleTestTextConnection"
-              :disabled="testingText || !settingsStore.textApi.apiKey || !settingsStore.textApi.model"
-              class="btn-primary text-sm"
-            >
-              {{ testingText ? '测试中...' : '测试连接' }}
-            </button>
-          </div>
-
-          <div
-            v-if="textTestResult !== null"
-            class="mt-3 text-sm rounded-lg p-3"
-            :class="textTestResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-          >
-            {{ textTestResult.message }}
-          </div>
-          <div
-            v-if="textValidateResult !== null"
-            class="mt-3 text-sm rounded-lg p-3"
-            :class="textValidateResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-          >
-            {{ textValidateResult.message }}
-          </div>
-        </div>
-
-        <!-- Vision API Config -->
-        <div v-show="activeTab === 'vision'">
-          <div class="flex items-center justify-between mb-3">
-            <p class="text-xs text-gray-400">用于拍照识别图片中的文字</p>
-            <button
-              @click="handleCopyTextToVision"
-              class="text-xs text-blue-500 hover:text-blue-700 whitespace-nowrap"
-            >
-              从文本配置复制
-            </button>
-          </div>
-
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-600 mb-1">AI提供商</label>
-            <select
-              :value="settingsStore.visionApi.provider"
-              @change="settingsStore.setVisionProvider($event.target.value)"
-              class="input-field"
-            >
-              <option value="openai">OpenAI (GPT-4o)</option>
-              <option value="qwen">通义千问</option>
-              <option value="zhipu">智谱 AI (GLM)</option>
-              <option value="siliconflow">硅基流动 (SiliconFlow)</option>
-              <option value="claude">Claude</option>
-              <option value="custom">自定义</option>
-            </select>
-          </div>
-
-          <div v-if="settingsStore.visionApi.provider === 'custom'" class="mb-4">
-            <label class="block text-sm font-medium text-gray-600 mb-1">API 格式</label>
-            <select
-              :value="settingsStore.visionApi.apiFormat"
-              @change="settingsStore.visionApi.apiFormat = $event.target.value"
-              class="input-field"
-            >
-              <option value="openai">OpenAI 兼容格式</option>
-              <option value="claude">Claude 格式</option>
-            </select>
-            <p class="text-xs text-gray-400 mt-1">大多数第三方服务使用 OpenAI 兼容格式</p>
-          </div>
-
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-600 mb-1">API Key</label>
-            <div class="relative">
-              <input
-                :type="showVisionApiKey ? 'text' : 'password'"
-                :value="settingsStore.visionApi.apiKey"
-                @input="settingsStore.visionApi.apiKey = $event.target.value"
-                placeholder="输入你的API Key"
-                class="input-field pr-10"
-              />
-              <button
-                @click="showVisionApiKey = !showVisionApiKey"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <svg v-if="showVisionApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-                </svg>
-                <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-600 mb-1">模型ID</label>
-            <div class="flex gap-2">
-              <input
-                :value="settingsStore.visionApi.model"
-                @input="settingsStore.visionApi.model = $event.target.value"
-                placeholder="例如: gpt-4o, glm-4v-plus, qwen-vl-plus"
-                class="input-field flex-1"
-              />
-              <button
-                @click="handleValidateVisionModel"
-                :disabled="validatingVision || !settingsStore.visionApi.apiKey || !settingsStore.visionApi.model"
-                class="btn-outline text-xs whitespace-nowrap"
-              >
-                {{ validatingVision ? '验证中...' : '验证' }}
-              </button>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <button
-              @click="showVisionAdvanced = !showVisionAdvanced"
-              class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
-            >
-              <svg
-                class="w-4 h-4 transition-transform"
-                :class="{ 'rotate-90': showVisionAdvanced }"
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
-              高级选项
-            </button>
-            <div v-if="showVisionAdvanced" class="mt-2">
-              <label class="block text-sm font-medium text-gray-600 mb-1">API 端点</label>
-              <input
-                :value="settingsStore.visionApi.endpoint"
-                @input="settingsStore.visionApi.endpoint = $event.target.value"
-                placeholder="https://api.openai.com/v1/chat/completions"
-                class="input-field"
-              />
-            </div>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <button
-              @click="handleTestVisionConnection"
-              :disabled="testingVision || !settingsStore.visionApi.apiKey || !settingsStore.visionApi.model"
-              class="btn-primary text-sm"
-            >
-              {{ testingVision ? '测试中...' : '测试连接' }}
-            </button>
-          </div>
-
-          <div
-            v-if="visionTestResult !== null"
-            class="mt-3 text-sm rounded-lg p-3"
-            :class="visionTestResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-          >
-            {{ visionTestResult.message }}
-          </div>
-          <div
-            v-if="visionValidateResult !== null"
-            class="mt-3 text-sm rounded-lg p-3"
-            :class="visionValidateResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-          >
-            {{ visionValidateResult.message }}
-          </div>
-          <div
-            v-if="copySuccess"
-            class="mt-3 text-sm rounded-lg p-3 bg-green-50 text-green-700"
-          >
-            已从文本模型配置复制
-          </div>
-        </div>
-      </template>
     </div>
 
-    <!-- Data Management -->
+    <!-- 数据管理 -->
     <div class="card mb-4">
       <h2 class="font-semibold text-gray-800 mb-4">数据管理</h2>
 
@@ -495,21 +247,13 @@
           <p class="text-xs font-medium text-gray-600">Markdown 导出范围</p>
           <select v-model="markdownExportScope" class="input-field text-sm">
             <option value="all">全部已分析句子</option>
-            <option value="current">当前筛选结果（收藏页筛选）</option>
+            <option value="current">当前筛选结果</option>
             <option value="tag">按标签</option>
           </select>
-
-          <select
-            v-if="markdownExportScope === 'tag'"
-            v-model="markdownExportTag"
-            class="input-field text-sm"
-          >
+          <select v-if="markdownExportScope === 'tag'" v-model="markdownExportTag" class="input-field text-sm">
             <option value="">请选择标签</option>
-            <option v-for="tag in sentencesStore.allTags" :key="tag" :value="tag">
-              {{ tag }}
-            </option>
+            <option v-for="tag in sentencesStore.allTags" :key="tag" :value="tag">{{ tag }}</option>
           </select>
-
           <p class="text-xs text-gray-500">{{ markdownScopeHint }}</p>
         </div>
 
@@ -521,10 +265,7 @@
           <input type="file" accept=".json" @change="handleImport" class="hidden" />
         </label>
 
-        <button
-          @click="showClearConfirm = true"
-          class="btn-danger text-sm w-full text-left flex items-center gap-2"
-        >
+        <button @click="showClearConfirm = true" class="btn-danger text-sm w-full text-left flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
@@ -532,20 +273,16 @@
         </button>
       </div>
 
-      <div
-        v-if="importResult"
-        class="mt-3 text-sm rounded-lg p-3"
-        :class="importResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-      >
+      <div v-if="importResult" class="mt-3 text-sm rounded-lg p-3"
+        :class="importResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'">
         {{ importResult.message }}
       </div>
     </div>
 
-    <!-- Account Section -->
+    <!-- 账号与同步 -->
     <div class="card mb-4">
       <h2 class="font-semibold text-gray-800 mb-4">账号与同步</h2>
 
-      <!-- 已登录 -->
       <template v-if="authStore.isLoggedIn">
         <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg mb-3">
           <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
@@ -555,26 +292,20 @@
             <p class="text-sm font-medium text-gray-800 truncate">{{ authStore.user?.displayName }}</p>
             <p class="text-xs text-gray-500 truncate">{{ authStore.user?.email }}</p>
           </div>
-          <!-- 同步状态点 -->
           <span class="flex items-center gap-1 text-xs" :class="syncStatusColor">
             <span class="w-2 h-2 rounded-full" :class="syncDotClass"></span>
             {{ syncStatusText }}
           </span>
         </div>
 
-        <!-- 同步统计 -->
-        <div class="grid grid-cols-3 gap-2 mb-3 text-center">
+        <div class="grid grid-cols-2 gap-2 mb-3 text-center">
           <div class="bg-gray-50 rounded-lg p-2">
             <p class="text-xs text-gray-500">上次同步</p>
             <p class="text-xs font-medium text-gray-700">{{ lastSyncText }}</p>
           </div>
-          <div class="bg-yellow-50 rounded-lg p-2 cursor-pointer" @click="showConflicts = !showConflicts">
-            <p class="text-xs text-yellow-600">冲突</p>
-            <p class="text-xs font-medium text-yellow-700">{{ syncStore.conflictCount }}</p>
-          </div>
-          <div class="bg-red-50 rounded-lg p-2">
-            <p class="text-xs text-red-600">死信</p>
-            <p class="text-xs font-medium text-red-700">{{ syncStore.deadLetterCount }}</p>
+          <div class="bg-gray-50 rounded-lg p-2">
+            <p class="text-xs text-gray-500">状态</p>
+            <p class="text-xs font-medium text-gray-700" :class="syncStatusColor">{{ syncStatusText }}</p>
           </div>
         </div>
 
@@ -595,7 +326,6 @@
         </div>
       </template>
 
-      <!-- 未登录 -->
       <template v-else>
         <p class="text-sm text-gray-500 mb-3">登录后可将句子同步到云端，跨设备访问。</p>
         <router-link to="/login" class="btn-primary text-sm w-full flex items-center justify-center gap-2">
@@ -607,16 +337,11 @@
       </template>
     </div>
 
-    <!-- Clear confirmation dialog -->
-    <div
-      v-if="showClearConfirm"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-    >
+    <!-- 清除确认 -->
+    <div v-if="showClearConfirm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div class="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
         <h3 class="font-bold text-lg mb-2 text-red-600">确认清除所有数据</h3>
-        <p class="text-gray-600 text-sm mb-4">
-          此操作将删除所有收藏的句子和分析结果，无法恢复。建议先导出数据备份。
-        </p>
+        <p class="text-gray-600 text-sm mb-4">此操作将删除所有收藏的句子和分析结果，无法恢复。建议先导出数据备份。</p>
         <div class="flex gap-2 justify-end">
           <button @click="showClearConfirm = false" class="btn-outline text-sm">取消</button>
           <button @click="handleClear" class="btn-danger text-sm">确认清除</button>
@@ -632,7 +357,7 @@ import { useRouter } from 'vue-router'
 import { useSettingsStore, useSentencesStore } from '../stores/index.js'
 import { useAuthStore } from '../stores/auth.js'
 import { useSyncStore } from '../stores/sync.js'
-import { testConnection, validateModel } from '../api/index.js'
+import { useAiConfigStore } from '../stores/aiConfig.js'
 import { buildMarkdownDocument, downloadMarkdown } from '../utils/export.js'
 
 const router = useRouter()
@@ -640,9 +365,95 @@ const settingsStore = useSettingsStore()
 const sentencesStore = useSentencesStore()
 const authStore = useAuthStore()
 const syncStore = useSyncStore()
+const aiConfigStore = useAiConfigStore()
 
-const showConflicts = ref(false)
+// ── AI 配置表单 ──────────────────────────────────────────
+const aiTab = ref('text')
+const showTextKey = ref(false)
+const showVisionKey = ref(false)
+const textProviderInput = ref('')
+const textKeyInput = ref('')
+const textModelInput = ref('')
+const textEndpointInput = ref('')
+const visionProviderInput = ref('')
+const visionKeyInput = ref('')
+const visionModelInput = ref('')
+const visionEndpointInput = ref('')
+const testingText = ref(false)
+const testingVision = ref(false)
+const testResult = ref(null)
+const saveSuccess = ref(false)
 
+onMounted(async () => {
+  if (sentencesStore.sentences.length === 0) {
+    sentencesStore.loadSentences()
+  }
+  if (authStore.isLoggedIn && !aiConfigStore.loaded) {
+    await aiConfigStore.fetch()
+  }
+})
+
+async function handleSaveText() {
+  testResult.value = null
+  saveSuccess.value = false
+  const payload = {}
+  if (textProviderInput.value) payload.textProvider = textProviderInput.value
+  if (textKeyInput.value)      payload.textApiKey = textKeyInput.value
+  if (textModelInput.value)    payload.textModel = textModelInput.value
+  if (textEndpointInput.value) payload.textEndpoint = textEndpointInput.value
+  if (Object.keys(payload).length === 0) return
+  try {
+    await aiConfigStore.save(payload)
+    textKeyInput.value = ''
+    saveSuccess.value = true
+    setTimeout(() => { saveSuccess.value = false }, 2000)
+  } catch { /* error shown via aiConfigStore.error */ }
+}
+
+async function handleSaveVision() {
+  testResult.value = null
+  saveSuccess.value = false
+  const payload = {}
+  if (visionProviderInput.value) payload.visionProvider = visionProviderInput.value
+  if (visionKeyInput.value)      payload.visionApiKey = visionKeyInput.value
+  if (visionModelInput.value)    payload.visionModel = visionModelInput.value
+  if (visionEndpointInput.value) payload.visionEndpoint = visionEndpointInput.value
+  if (Object.keys(payload).length === 0) return
+  try {
+    await aiConfigStore.save(payload)
+    visionKeyInput.value = ''
+    saveSuccess.value = true
+    setTimeout(() => { saveSuccess.value = false }, 2000)
+  } catch { /* error shown via aiConfigStore.error */ }
+}
+
+async function handleTestText() {
+  testingText.value = true
+  testResult.value = null
+  try {
+    const res = await aiConfigStore.testConnection('text')
+    testResult.value = res
+  } catch (err) {
+    testResult.value = { success: false, message: err.message }
+  } finally {
+    testingText.value = false
+  }
+}
+
+async function handleTestVision() {
+  testingVision.value = true
+  testResult.value = null
+  try {
+    const res = await aiConfigStore.testConnection('vision')
+    testResult.value = res
+  } catch (err) {
+    testResult.value = { success: false, message: err.message }
+  } finally {
+    testingVision.value = false
+  }
+}
+
+// ── 同步状态 ──────────────────────────────────────────────
 const syncStatusText = computed(() => {
   const s = syncStore.status
   if (s === 'syncing') return '同步中'
@@ -676,47 +487,23 @@ const lastSyncText = computed(() => {
 })
 
 async function handleManualSync() {
-  await syncStore.incrementalPull()
-  await syncStore.flushQueue()
+  await syncStore.pull()
 }
 
 async function handleLogout() {
   await authStore.doLogout()
-  syncStore.stopPeriodicPull()
   router.push('/')
 }
 
-const activeTab = ref('text')
-const showTextApiKey = ref(false)
-const showVisionApiKey = ref(false)
-const showTextAdvanced = ref(false)
-const showVisionAdvanced = ref(false)
-
-const testingText = ref(false)
-const textTestResult = ref(null)
-const validatingText = ref(false)
-const textValidateResult = ref(null)
-
-const testingVision = ref(false)
-const visionTestResult = ref(null)
-const validatingVision = ref(false)
-const visionValidateResult = ref(null)
-
-const copySuccess = ref(false)
+// ── 数据管理 ──────────────────────────────────────────────
 const showClearConfirm = ref(false)
 const importResult = ref(null)
 const markdownExportScope = ref('all')
 const markdownExportTag = ref('')
 
-onMounted(() => {
-  if (sentencesStore.sentences.length === 0) {
-    sentencesStore.loadSentences()
-  }
-})
-
 const markdownScopeHint = computed(() => {
   if (markdownExportScope.value === 'current') {
-    return `当前筛选条件：关键词「${sentencesStore.searchQuery || '无'}」、标签「${sentencesStore.filterTag || '全部'}」、排序「${sentencesStore.sortOrder === 'desc' ? '最新优先' : '最早优先'}」`
+    return `当前筛选：关键词「${sentencesStore.searchQuery || '无'}」、标签「${sentencesStore.filterTag || '全部'}」`
   }
   if (markdownExportScope.value === 'tag') {
     return markdownExportTag.value
@@ -725,76 +512,6 @@ const markdownScopeHint = computed(() => {
   }
   return '导出全部已分析句子'
 })
-
-async function handleTestTextConnection() {
-  testingText.value = true
-  textTestResult.value = null
-  try {
-    const ok = await testConnection(settingsStore.textApi)
-    textTestResult.value = {
-      success: ok,
-      message: ok ? 'API连接成功！' : 'API返回了异常结果，请检查配置',
-    }
-  } catch (err) {
-    textTestResult.value = { success: false, message: err.message || '连接失败' }
-  } finally {
-    testingText.value = false
-  }
-}
-
-async function handleValidateTextModel() {
-  validatingText.value = true
-  textValidateResult.value = null
-  try {
-    const ok = await validateModel(settingsStore.textApi)
-    textValidateResult.value = {
-      success: ok,
-      message: ok ? `文本模型「${settingsStore.textApi.model}」可用` : '模型不可用，请检查模型ID是否正确',
-    }
-  } catch (err) {
-    textValidateResult.value = { success: false, message: err.message || '验证失败' }
-  } finally {
-    validatingText.value = false
-  }
-}
-
-async function handleTestVisionConnection() {
-  testingVision.value = true
-  visionTestResult.value = null
-  try {
-    const ok = await testConnection(settingsStore.visionApi)
-    visionTestResult.value = {
-      success: ok,
-      message: ok ? 'API连接成功！' : 'API返回了异常结果，请检查配置',
-    }
-  } catch (err) {
-    visionTestResult.value = { success: false, message: err.message || '连接失败' }
-  } finally {
-    testingVision.value = false
-  }
-}
-
-async function handleValidateVisionModel() {
-  validatingVision.value = true
-  visionValidateResult.value = null
-  try {
-    const ok = await validateModel(settingsStore.visionApi)
-    visionValidateResult.value = {
-      success: ok,
-      message: ok ? `模型「${settingsStore.visionApi.model}」可用` : '模型不可用，请检查模型ID是否正确',
-    }
-  } catch (err) {
-    visionValidateResult.value = { success: false, message: err.message || '验证失败' }
-  } finally {
-    validatingVision.value = false
-  }
-}
-
-function handleCopyTextToVision() {
-  settingsStore.copyTextToVision()
-  copySuccess.value = true
-  setTimeout(() => { copySuccess.value = false }, 2000)
-}
 
 function handleExport() {
   const data = sentencesStore.exportData()
@@ -810,20 +527,18 @@ function handleExport() {
 function handleExportMarkdown() {
   let list = []
   if (markdownExportScope.value === 'current') {
-    list = sentencesStore.filteredSentences.filter((sentence) => sentence.analysis)
+    list = sentencesStore.filteredSentences.filter((s) => s.analysis)
   } else if (markdownExportScope.value === 'tag') {
     if (!markdownExportTag.value) {
-      importResult.value = { success: false, message: '请先选择标签，再执行 Markdown 导出' }
+      importResult.value = { success: false, message: '请先选择标签' }
       return
     }
-    list = sentencesStore.sentences.filter(
-      (sentence) => sentence.analysis && sentence.tags.includes(markdownExportTag.value)
-    )
+    list = sentencesStore.sentences.filter((s) => s.analysis && s.tags.includes(markdownExportTag.value))
   } else {
-    list = sentencesStore.sentences.filter((sentence) => sentence.analysis)
+    list = sentencesStore.sentences.filter((s) => s.analysis)
   }
   if (list.length === 0) {
-    importResult.value = { success: false, message: '当前范围内无可导出的分析结果，请调整筛选或先完成句子分析' }
+    importResult.value = { success: false, message: '当前范围内无可导出的分析结果' }
     return
   }
   const markdown = buildMarkdownDocument(list, '英语长难句笔记导出')
@@ -838,7 +553,7 @@ async function handleImport(event) {
   try {
     const text = await file.text()
     await sentencesStore.importData(text)
-    importResult.value = { success: true, message: `成功导入数据！当前共 ${sentencesStore.sentences.length} 条句子` }
+    importResult.value = { success: true, message: `成功导入！当前共 ${sentencesStore.sentences.length} 条句子` }
   } catch (err) {
     importResult.value = { success: false, message: `导入失败: ${err.message}` }
   }
